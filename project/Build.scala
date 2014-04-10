@@ -36,7 +36,10 @@ object MyBuild extends Build {
     "tests",
     file("tests"),
     settings = buildSettings ++ Seq(
-      libraryDependencies += "org.scalamacros" %% "xml" % "1.0.0-M1"
+      libraryDependencies ++= Seq(
+        "org.scalamacros" %% "xml" % "1.0.0-M1",
+        "org.scalatest" %% "scalatest" % "2.1.3" % "test"
+      )
     )
   ) dependsOn(xmlquote)
 }

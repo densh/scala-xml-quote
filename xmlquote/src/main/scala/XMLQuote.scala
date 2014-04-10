@@ -59,7 +59,12 @@ package xmlquote {
       case  _ => n
     }
     def apply[T](args: Tree*): Tree = {
-      val parsed = xml.XML.loadString(xmlstr)
+      val parsed =
+        try xml.XML.loadString(xmlstr)
+        catch {
+          case exc: org.xml.sax.SAXParseException =>
+            c.abort(c.macroApplication.pos, exc.getMessage)
+        }
       val transformed = transformNode(parsed).head
       q"{ val $$scope = _root_.scala.xml.TopScope; $transformed }"
     }
