@@ -1,45 +1,21 @@
-import sbt._
-import Keys._
+import sbt._, Keys._
 
-object BuildSettings {
-  val buildSettings = Defaults.defaultSettings ++ Seq(
-    organization := "org.scalamacros",
-    version := "1.0.0",
-    scalaVersion := "2.11.0-RC4",
+object XmlquoteBuild extends Build {
+  val sharedSettings = Defaults.defaultSettings ++ Seq(
+    version := "0.1-SNAPSHOT",
+    scalaVersion := "2.11.7",
     resolvers += Resolver.sonatypeRepo("snapshots"),
     resolvers += Resolver.sonatypeRepo("releases"),
     scalacOptions ++= Seq()
   )
-}
-
-object MyBuild extends Build {
-  import BuildSettings._
-
-  lazy val root: Project = Project(
-    "root",
-    file("."),
-    settings = buildSettings ++ Seq(
-      run <<= run in Compile in tests
-    )
-  ) aggregate(xmlquote, tests)
 
   lazy val xmlquote: Project = Project(
     "xmlquote",
-    file("xmlquote"),
-    settings = buildSettings ++ Seq(
+    file("."),
+    settings = sharedSettings ++ Seq(
       libraryDependencies <+= (scalaVersion)("org.scala-lang" % "scala-reflect" % _),
-      libraryDependencies += "org.scalamacros" %% "xml" % "1.0.0-M1"
+      libraryDependencies += "org.scala-lang.modules" %% "scala-xml" % "1.0.3",
+      libraryDependencies += "org.scalatest" % "scalatest_2.11" % "2.2.4" % "test"
     )
   )
-
-  lazy val tests: Project = Project(
-    "tests",
-    file("tests"),
-    settings = buildSettings ++ Seq(
-      libraryDependencies ++= Seq(
-        "org.scalamacros" %% "xml" % "1.0.0-M1",
-        "org.scalatest" %% "scalatest" % "2.1.3" % "test"
-      )
-    )
-  ) dependsOn(xmlquote)
 }
