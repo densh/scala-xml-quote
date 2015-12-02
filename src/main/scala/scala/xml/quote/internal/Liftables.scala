@@ -89,11 +89,16 @@ trait Liftables extends Nodes {
     """)
   }
 
-  // TODO: what to do with Atom[T]?
   implicit val liftAtom = Liftable[xml.Atom[_]] {
     case pcdata:   xml.PCData   => liftPCData(pcdata)
     case text:     xml.Text     => liftText(text)
     case unparsed: xml.Unparsed => liftUnparsed(unparsed)
+    case atom:     xml.Atom[_]  =>
+      atom.data match {
+        case c: Char   => q"new _root_.scala.xml.Atom($c)"
+        case s: String => q"new _root_.scala.xml.Atom($s)"
+        case v         => throw new Exception(s"unsupported atom value: $v (${v.getClass})")
+      }
   }
 
   implicit val liftSpecialNode = Liftable[xml.SpecialNode] {
