@@ -1,5 +1,5 @@
 import org.scalatest.FunSuite
-import xmlquote._
+import scala.xml.quote._
 
 class ConstructionSuite extends FunSuite {
   // // fails to compile

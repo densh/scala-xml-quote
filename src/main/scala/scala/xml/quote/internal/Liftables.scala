@@ -1,11 +1,11 @@
-package org.scalamacros.xml
+package scala.xml.quote.internal
 
-import scala.reflect.api.Universe
+import scala.reflect.macros.whitebox.Context
 
 trait Liftables extends Nodes {
-  protected val __universe: Universe
-  import __universe._
-  import __universe.internal.reificationSupport.{SyntacticBlock => SynBlock}
+  val c: Context
+  import c.universe._
+  import c.universe.internal.reificationSupport.{SyntacticBlock => SynBlock}
 
   implicit val liftComment = Liftable[xml.Comment] { c =>
     q"new _root_.scala.xml.Comment(${c.commentText})"
@@ -90,14 +90,14 @@ trait Liftables extends Nodes {
   }
 
   // TODO: what to do with Atom[T]?
-  implicit val liftAtom = Liftable[xml.Atom[String]] {
+  implicit val liftAtom = Liftable[xml.Atom[_]] {
     case pcdata:   xml.PCData   => liftPCData(pcdata)
     case text:     xml.Text     => liftText(text)
     case unparsed: xml.Unparsed => liftUnparsed(unparsed)
   }
 
   implicit val liftSpecialNode = Liftable[xml.SpecialNode] {
-    case atom:      xml.Atom[String] => liftAtom(atom)
+    case atom:      xml.Atom[_]      => liftAtom(atom)
     case comment:   xml.Comment      => liftComment(comment)
     case procinstr: xml.ProcInstr    => liftProcInstr(procinstr)
     case entityref: xml.EntityRef    => liftEntityRef(entityref)

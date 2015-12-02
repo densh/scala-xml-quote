@@ -1,11 +1,11 @@
-package org.scalamacros.xml
+package scala.xml.quote.internal
 
-import scala.reflect.api.Universe
+import scala.reflect.macros.whitebox.Context
 
 trait Unliftables extends Nodes {
-  protected val __universe: Universe
-  import __universe._
-  import __universe.internal.reificationSupport.{SyntacticBlock => SynBlock}
+  val c: Context
+  import c.universe._
+  import c.universe.internal.reificationSupport.{SyntacticBlock => SynBlock}
 
   object XML {
     private val xmlpackage = rootMirror.staticPackage("scala.xml")

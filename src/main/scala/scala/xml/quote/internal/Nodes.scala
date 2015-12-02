@@ -1,9 +1,10 @@
-package org.scalamacros.xml
+package scala.xml.quote.internal
 
-import scala.reflect.api.Universe
+import scala.reflect.macros.whitebox.Context
 
 trait Nodes {
-  protected val __universe: Universe; import __universe._
+  val c: Context
+  import c.universe._
 
   case class Unquote(tree: Tree) extends xml.SpecialNode {
     def label: String = "#UNQUOTE"
