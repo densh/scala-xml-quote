@@ -97,11 +97,11 @@ trait Liftables extends Nodes {
   }
 
   implicit val liftSpecialNode = Liftable[xml.SpecialNode] {
-    case atom:      xml.Atom[_]      => liftAtom(atom)
-    case comment:   xml.Comment      => liftComment(comment)
-    case procinstr: xml.ProcInstr    => liftProcInstr(procinstr)
-    case entityref: xml.EntityRef    => liftEntityRef(entityref)
-    case unquote:   Unquote          => liftUnquote(unquote)
+    case atom:      xml.Atom[_]   => liftAtom(atom)
+    case comment:   xml.Comment   => liftComment(comment)
+    case procinstr: xml.ProcInstr => liftProcInstr(procinstr)
+    case entityref: xml.EntityRef => liftEntityRef(entityref)
+    case unquote:   Unquote       => liftUnquote(unquote)
   }
 
   implicit def liftNode(implicit outer: xml.NamespaceBinding = xml.TopScope): Liftable[xml.Node] = Liftable[xml.Node] {
