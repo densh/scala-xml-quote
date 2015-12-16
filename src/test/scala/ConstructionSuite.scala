@@ -6,11 +6,15 @@ class ConstructionSuite extends FunSuite {
     assert(xml"<!--foo-->" == <!--foo-->)
   }
 
+  test("reconstruct group") {
+    assert(xml"<xml:group><foo/><bar/></xml:group>" == <xml:group><foo/><bar/></xml:group>)
+  }
+
   test("reconstruct text") {
     assert(xml"<![CDATA[foo]]>" == <![CDATA[foo]]>)
   }
 
-  ignore("reconstruct entity ref") {
+  test("reconstruct entity ref") {
     assert(xml"<foo>&amp;</foo>" == <foo>&amp;</foo>)
   }
 
@@ -18,7 +22,7 @@ class ConstructionSuite extends FunSuite {
     assert(xml"<foo><?foo bar?></foo>" == <foo><?foo bar?></foo>)
   }
 
-  ignore("reconstruct unparsed") {
+  test("reconstruct unparsed") {
     assert(xml"<xml:unparsed>foo</xml:unparsed>" == <xml:unparsed>foo</xml:unparsed>)
   }
 

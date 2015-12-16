@@ -15,8 +15,12 @@ class QuoteImpl(val c: Context) extends Nodes with Liftables with Unliftables {
   def parse(s: String): xml.Node =
     new QuoteParser(io.Source.fromString(s), true).initialize.content(xml.TopScope).head
 
-  def wrap(node: xml.Node) =
-    q"{ val $$scope = _root_.scala.xml.TopScope; $node }"
+  def wrap(node: xml.Node) = q"$node"
 
-  def apply[T](args: Tree*): Tree = wrap(parse(text()))
+  def pp[T <: Tree](t: T): T = {
+    println(showCode(t))
+    t
+  }
+
+  def apply[T](args: Tree*): Tree = pp(wrap(parse(text())))
 }
