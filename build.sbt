@@ -1,6 +1,6 @@
 lazy val commonSettings = Seq(
   version := "0.1-SNAPSHOT",
-  scalaVersion := "2.11.7",
+  scalaVersion := "2.11.8",
   resolvers += Resolver.sonatypeRepo("snapshots"),
   resolvers += Resolver.sonatypeRepo("releases"),
   scalacOptions ++= Seq()
