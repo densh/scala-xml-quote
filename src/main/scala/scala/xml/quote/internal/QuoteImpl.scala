@@ -8,12 +8,13 @@ class QuoteImpl(val c: Context) extends Nodes with Liftables with Unliftables {
   import c.universe._
 
   lazy val q"$_($_(..${parts: List[String]})).xml.apply[..$_](..$args)" = c.macroApplication
-  assert(args.length == 0)
 
-  def text(): String = parts.head
+  private lazy val exprIt = args.iterator
 
-  def parse(s: String): xml.Node =
-    new QuoteParser(io.Source.fromString(s), true).initialize.content(xml.TopScope).head
+  def parse(s: String): xml.Node = {
+    val parser = new QuoteParser(io.Source.fromString(s), true, _ => Unquote(exprIt.next()))
+    parser.initialize.content(xml.TopScope).head
+  }
 
   def wrap(node: xml.Node) = q"$node"
 
@@ -22,5 +23,8 @@ class QuoteImpl(val c: Context) extends Nodes with Liftables with Unliftables {
     t
   }
 
-  def apply[T](args: Tree*): Tree = pp(wrap(parse(text())))
+  def apply[T](args: Tree*): Tree = {
+    val text = parts.map(_.replace("$", "$$")).mkString("$")
+    pp(wrap(parse(text)))
+  }
 }
