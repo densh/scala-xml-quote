@@ -6,11 +6,12 @@ import scala.xml.parsing._
 
 trait QuoteHandler extends ConstructingHandler {
   def unparsed(pos: Int, data: String): Unparsed = Unparsed(data)
-
   def group(pos: Int, elems: NodeSeq): Group = Group(elems)
 }
 
-final class QuoteParser(val input: io.Source, val preserveWS: Boolean)
+final class QuoteParser(val input: io.Source,
+                        val preserveWS: Boolean,
+                        unquoteHandler: Int => Node)
     extends QuoteHandler
     with MarkupParser
     with ExternalSources {
@@ -70,6 +71,10 @@ final class QuoteParser(val input: io.Source, val preserveWS: Boolean)
             case _   => content1(pscope, ts)
           }
 
+        case '$' =>
+          nextch()
+          ts &+ unquoteHandler(tmppos)
+
         // postcond: xEmbeddedBlock == false!
         case '&' => // EntityRef or CharRef
           nextch(); ch match {
@@ -88,6 +93,48 @@ final class QuoteParser(val input: io.Source, val preserveWS: Boolean)
       }
     }
     done
+  }
+
+  override def xAttributes(pscope: NamespaceBinding): (MetaData, NamespaceBinding) = {
+    var scope: NamespaceBinding = pscope
+    var aMap: MetaData = Null
+    while (isNameStart(ch)) {
+      val qname = xName
+      xEQ() // side effect
+      val value =
+        if (ch == '$') {
+          nextch()
+          None
+        }
+        else Some(xAttributeValue())
+
+      def valueOrExpr =
+        value.map(Text.apply).getOrElse(unquoteHandler(pos))
+
+      Utility.prefix(qname) match {
+        case Some("xmlns") =>
+          val prefix = qname.substring(6 /*xmlns:*/ , qname.length)
+          scope = new NamespaceBinding(prefix, value.get, scope)
+
+        case Some(prefix) =>
+          val key = qname.substring(prefix.length + 1, qname.length)
+          aMap = new PrefixedAttribute(prefix, key, valueOrExpr, aMap)
+
+        case _ =>
+          if (qname == "xmlns")
+            scope = new NamespaceBinding(null, value.get, scope)
+          else
+            aMap = new UnprefixedAttribute(qname, valueOrExpr, aMap)
+      }
+
+      if ((ch != '/') && (ch != '>') && ('?' != ch))
+        xSpace()
+    }
+
+    if (!aMap.wellformed(scope))
+      reportSyntaxError("double attribute")
+
+    (aMap, scope)
   }
 
   def xUnparsed: NodeSeq =
