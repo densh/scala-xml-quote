@@ -79,7 +79,7 @@ class ConstructionSuite extends FunSuite {
    assert(xml"<foo a:b=${"foo" + "bar"}/>" == <foo a:b={"foo" + "bar"}/>)
   }
 
-//   test("reconstruct unquote within namespaced elem") {
-//     assert(xml"""<foo xmlns:pre=${"foo" + "bar"}/>""" == <foo xmlns:pre={"foo" + "bar"}/>)
-//   }
+   test("reconstruct unquote within namespaced elem") {
+     assert(xml"""<foo xmlns:pre=${"foo" + "bar"}/>""" == <foo xmlns:pre={"foo" + "bar"}/>)
+   }
 }

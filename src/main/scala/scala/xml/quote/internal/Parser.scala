@@ -9,14 +9,21 @@ trait QuoteHandler extends ConstructingHandler {
   def group(pos: Int, elems: NodeSeq): Group = Group(elems)
 }
 
-final class QuoteParser(val input: io.Source,
-                        val preserveWS: Boolean,
-                        unquoteHandler: Int => Node)
+final class QuoteParser(val input: io.Source, val preserveWS: Boolean)
     extends QuoteHandler
     with MarkupParser
     with ExternalSources {
 
   def handle: QuoteHandler = this
+
+  private def hole(): String = {
+    val buf = new StringBuilder
+
+    do buf.append(ch_returning_nextch)
+    while (ch.isDigit)
+
+    buf.toString()
+  }
 
   override def element1(pscope: NamespaceBinding): NodeSeq = {
     val pos = this.pos
@@ -72,8 +79,7 @@ final class QuoteParser(val input: io.Source,
           }
 
         case '$' =>
-          nextch()
-          ts &+ unquoteHandler(tmppos)
+          ts &+ Text(hole())
 
         // postcond: xEmbeddedBlock == false!
         case '&' => // EntityRef or CharRef
@@ -102,29 +108,23 @@ final class QuoteParser(val input: io.Source,
       val qname = xName
       xEQ() // side effect
       val value =
-        if (ch == '$') {
-          nextch()
-          None
-        }
-        else Some(xAttributeValue())
-
-      def valueOrExpr =
-        value.map(Text.apply).getOrElse(unquoteHandler(pos))
+        if (ch == '$') hole()
+        else xAttributeValue()
 
       Utility.prefix(qname) match {
         case Some("xmlns") =>
           val prefix = qname.substring(6 /*xmlns:*/ , qname.length)
-          scope = new NamespaceBinding(prefix, value.get, scope)
+          scope = new NamespaceBinding(prefix, value, scope)
 
         case Some(prefix) =>
           val key = qname.substring(prefix.length + 1, qname.length)
-          aMap = new PrefixedAttribute(prefix, key, valueOrExpr, aMap)
+          aMap = new PrefixedAttribute(prefix, key, Text(value), aMap)
 
         case _ =>
           if (qname == "xmlns")
-            scope = new NamespaceBinding(null, value.get, scope)
+            scope = new NamespaceBinding(null, value, scope)
           else
-            aMap = new UnprefixedAttribute(qname, valueOrExpr, aMap)
+            aMap = new UnprefixedAttribute(qname, Text(value), aMap)
       }
 
       if ((ch != '/') && (ch != '>') && ('?' != ch))
