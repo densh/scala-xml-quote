@@ -18,6 +18,17 @@ trait Liftables extends Nodes {
     else f(v)
   }
 
+  implicit val liftNodeBuffer: Liftable[xml.NodeBuffer] = Liftable { b =>
+    val additions = b.map { node => q"$$buf &+ $node" }
+    q"""
+      {
+        val $$buf = new $sx.NodeBuffer
+        ..$additions
+        $$buf
+      }
+    """
+  }
+
   implicit val liftComment: Liftable[xml.Comment] = Liftable { c =>
     q"new $sx.Comment(${c.commentText})"
   }

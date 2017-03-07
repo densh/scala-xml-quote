@@ -10,12 +10,19 @@ class QuoteImpl(val c: Context) extends Nodes with Liftables with Unliftables {
 
   lazy val q"$_($_(..${parts: List[String]})).xml.apply[..$_](..$args)" = c.macroApplication
 
-  def parse(s: String): xml.Node = {
+  def parse(s: String): xml.NodeBuffer = {
     val parser = new QuoteParser(io.Source.fromString(s), true)
-    parser.initialize.content(xml.TopScope).head
+    val nodes = parser.initialize.content(xml.TopScope)
+    val buffer = new xml.NodeBuffer
+    nodes.foreach(buffer &+ _)
+    buffer
   }
 
-  def wrap(node: xml.Node) = q"$node"
+  def wrap(buf: xml.NodeBuffer) = {
+    if (buf.size == 1) q"${buf.head}"
+    else q"$buf"
+  }
+
 
   def pp[T <: Tree](t: T): T = {
     println(showCode(t))

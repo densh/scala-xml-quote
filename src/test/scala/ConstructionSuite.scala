@@ -7,6 +7,10 @@ class ConstructionSuite extends FunSuite {
     assert(xml"<!--foo-->" == <!--foo-->)
   }
 
+//  test("reconstruct NodeBuffer") {
+//    assert(xml"<foo/><bar/>" == <foo/><bar/>)
+//  }
+
   test("reconstruct group") {
     assert(xml"<xml:group><foo/><bar/></xml:group>" == <xml:group><foo/><bar/></xml:group>)
   }
