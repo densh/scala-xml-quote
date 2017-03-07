@@ -3,6 +3,7 @@ package internal
 
 import scala.xml._
 import scala.xml.parsing._
+import scala.xml.quote.internal.QuoteImpl.Hole._
 
 trait QuoteHandler extends ConstructingHandler {
   def unparsed(pos: Int, data: String): Unparsed = Unparsed(data)
@@ -17,10 +18,11 @@ final class QuoteParser(val input: io.Source, val preserveWS: Boolean)
   def handle: QuoteHandler = this
 
   private def hole(): String = {
+    assert(isScalaExpr(ch))
     val buf = new StringBuilder
 
     do buf.append(ch_returning_nextch)
-    while (ch.isDigit)
+    while (isScalaExpr(ch))
 
     buf.toString()
   }
@@ -78,9 +80,6 @@ final class QuoteParser(val input: io.Source, val preserveWS: Boolean)
             case _   => content1(pscope, ts)
           }
 
-        case '$' =>
-          ts &+ Text(hole())
-
         // postcond: xEmbeddedBlock == false!
         case '&' => // EntityRef or CharRef
           nextch(); ch match {
@@ -94,6 +93,10 @@ final class QuoteParser(val input: io.Source, val preserveWS: Boolean)
               xToken(';')
               ts &+ handle.entityRef(tmppos, n)
           }
+
+        case _ if isScalaExpr(ch) =>
+          ts &+ Text(hole())
+
         case _ => // text content
           appendText(tmppos, ts, xText)
       }
@@ -108,7 +111,7 @@ final class QuoteParser(val input: io.Source, val preserveWS: Boolean)
       val qname = xName
       xEQ() // side effect
       val value =
-        if (ch == '$') hole()
+        if (isScalaExpr(ch)) hole()
         else xAttributeValue()
 
       Utility.prefix(qname) match {

@@ -33,13 +33,14 @@ class QuoteImpl(val c: Context) extends Nodes with Liftables with Unliftables {
 object QuoteImpl {
 
   private[internal] object Hole {
-    private val pat = java.util.regex.Pattern.compile("^\\$(\\d+)$")
+    private val char = 0xE000.toChar // withing private use area
 
-    def apply(i: Int) = s"$$$i"
+    def isScalaExpr(c: Char): Boolean = c == char
 
-    def unapply(s: String): Option[Int] = {
-      val m = pat.matcher(s)
-      if (m.find()) Some(m.group(1).toInt) else None
-    }
+    def apply(i: Int): String = char.toString * i
+
+    def unapply(s: String): Option[Int] =
+      if (s.forall(isScalaExpr)) Some(s.length)
+      else None
   }
 }
