@@ -37,10 +37,10 @@ object QuoteImpl {
 
     def isScalaExpr(c: Char): Boolean = c == char
 
-    def apply(i: Int): String = char.toString * i
+    def apply(i: Int): String = char.toString * (i + 1)
 
     def unapply(s: String): Option[Int] =
-      if (s.forall(isScalaExpr)) Some(s.length)
+      if (s.forall(isScalaExpr)) Some(s.length - 1)
       else None
   }
 }
