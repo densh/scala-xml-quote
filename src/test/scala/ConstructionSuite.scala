@@ -2,8 +2,13 @@ import org.scalatest.FunSuite
 import scala.xml.quote._
 
 class ConstructionSuite extends FunSuite {
+
   test("reconstruct comment") {
     assert(xml"<!--foo-->" == <!--foo-->)
+  }
+
+  test("reconstruct sequence of nodes") {
+    assert(xmls"<foo/><bar/>" == <foo/><bar/>)
   }
 
   test("reconstruct group") {
@@ -66,15 +71,19 @@ class ConstructionSuite extends FunSuite {
     assert(xml"""<foo xmlns:pre="a"><bar xmlns:pre="b"/></foo>""" == <foo xmlns:pre="a"><bar xmlns:pre="b"/></foo>)
   }
 
-  // test("reconstruct unquote within elem") {
-  //   assert(xml"<foo>${2 + 3}</foo>" == <foo>{2 + 3}</foo>)
-  // }
+  test("reconstruct unquote within elem") {
+   assert(xml"<foo>${2 + 3}</foo>" == <foo>{2 + 3}</foo>)
+  }
 
-  // test("reconstruct unquote within unprefixed attribute") {
-  //   assert(xml"<foo a=${"foo" + "bar"}/>" == <foo a={"foo" + "bar"}/>)
-  // }
+  test("reconstruct unquote within unprefixed attribute") {
+   assert(xml"<foo a=${"foo" + "bar"}/>" == <foo a={"foo" + "bar"}/>)
+  }
 
-  // test("reconstruct unquote within prefixed attribute") {
-  //   assert(xml"<foo a:b=${"foo" + "bar"}/>" == <foo a:b={"foo" + "bar"}/>)
-  // }
+  test("reconstruct unquote within prefixed attribute") {
+   assert(xml"<foo a:b=${"foo" + "bar"}/>" == <foo a:b={"foo" + "bar"}/>)
+  }
+
+   test("reconstruct unquote within namespaced elem") {
+     assert(xml"""<foo xmlns:pre=${"foo" + "bar"}/>""" == <foo xmlns:pre={"foo" + "bar"}/>)
+   }
 }

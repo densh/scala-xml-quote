@@ -11,5 +11,11 @@ lazy val xmlquote = (project in file(".")).
     commonSettings,
     libraryDependencies += "org.scala-lang" % "scala-reflect" % scalaVersion.value,
     libraryDependencies += "org.scala-lang.modules" %% "scala-xml" % "1.0.6",
-    libraryDependencies += "org.scalatest" % "scalatest_2.11" % "3.0.1" % "test"
+    libraryDependencies += "org.scalatest" % "scalatest_2.11" % "3.0.1" % "test",
+    scalacOptions ++= Seq(
+      "-deprecation",
+      "-feature",
+      "-unchecked"
+      //"-Xlint" // false positives with macros
+    )
   )

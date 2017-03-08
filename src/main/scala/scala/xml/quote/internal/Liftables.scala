@@ -1,11 +1,14 @@
 package scala.xml.quote.internal
 
 import scala.reflect.macros.whitebox.Context
+import scala.xml.quote.internal.QuoteImpl.Hole
 
 trait Liftables extends Nodes {
   val c: Context
   import c.universe._
   import c.universe.internal.reificationSupport.{SyntacticBlock => SynBlock}
+
+  val args: List[Tree]
 
   val sx = q"_root_.scala.xml"
   val sci = q"_root_.scala.collection.immutable"
@@ -15,12 +18,24 @@ trait Liftables extends Nodes {
     else f(v)
   }
 
+  implicit val liftNodeBuffer: Liftable[xml.NodeSeq] = Liftable { b =>
+    val additions = b.map { node => q"$$buf &+ $node" }
+    q"""
+      {
+        val $$buf = new $sx.NodeBuffer
+        ..$additions
+        $$buf
+      }
+    """
+  }
+
   implicit val liftComment: Liftable[xml.Comment] = Liftable { c =>
     q"new $sx.Comment(${c.commentText})"
   }
 
-  implicit val liftText: Liftable[xml.Text] = Liftable { t =>
-    q"new $sx.Text(${t.text})"
+  implicit val liftText: Liftable[xml.Text] = Liftable {
+    case xml.Text(Hole(i)) => args(i)
+    case t => q"new $sx.Text(${t.text})"
   }
 
   implicit val liftEntityRef: Liftable[xml.EntityRef] = Liftable { er =>
@@ -43,7 +58,13 @@ trait Liftables extends Nodes {
 
   implicit def liftNamespaceBinding: Liftable[xml.NamespaceBinding] = NullableLiftable { ns =>
     if (ns eq xml.TopScope) q"$sx.TopScope"
-    else q"new $sx.NamespaceBinding(${ns.prefix}, ${ns.uri}, ${ns.parent})"
+    else {
+      val value = ns.uri match {
+        case Hole(i) => args(i)
+        case s       => q"$s"
+      }
+      q"new $sx.NamespaceBinding(${ns.prefix}, $value, ${ns.parent})"
+    }
   }
 
   implicit def liftElem(implicit outer: xml.NamespaceBinding = xml.TopScope): Liftable[xml.Elem] =
