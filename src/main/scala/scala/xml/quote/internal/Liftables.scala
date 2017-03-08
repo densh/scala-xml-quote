@@ -18,7 +18,7 @@ trait Liftables extends Nodes {
     else f(v)
   }
 
-  implicit val liftNodeBuffer: Liftable[xml.NodeBuffer] = Liftable { b =>
+  implicit val liftNodeBuffer: Liftable[xml.NodeSeq] = Liftable { b =>
     val additions = b.map { node => q"$$buf &+ $node" }
     q"""
       {

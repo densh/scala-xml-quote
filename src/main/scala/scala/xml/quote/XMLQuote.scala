@@ -8,5 +8,8 @@ package object quote {
     object xml {
       def apply[T](args: T*): scala.xml.Node = macro QuoteImpl.apply[T]
     }
+    object xmls {
+      def apply[T](args: T*): scala.xml.NodeBuffer = macro QuoteImpl.applySeq[T]
+    }
   }
 }

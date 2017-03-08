@@ -8,21 +8,10 @@ import scala.xml.quote.internal.QuoteImpl.Hole
 class QuoteImpl(val c: Context) extends Nodes with Liftables with Unliftables {
   import c.universe._
 
-  lazy val q"$_($_(..${parts: List[String]})).xml.apply[..$_](..$args)" = c.macroApplication
-
-  def parse(s: String): xml.NodeBuffer = {
-    val parser = new QuoteParser(io.Source.fromString(s), true)
-    val nodes = parser.initialize.content(xml.TopScope)
-    val buffer = new xml.NodeBuffer
-    nodes.foreach(buffer &+ _)
-    buffer
+  lazy val (parts, args) = c.macroApplication match {
+    case q"$_($_(..${parts: List[String]})).xml.apply[..$_](..$args)"  => (parts, args)
+    case q"$_($_(..${parts: List[String]})).xmls.apply[..$_](..$args)" => (parts, args)
   }
-
-  def wrap(buf: xml.NodeBuffer) = {
-    if (buf.size == 1) q"${buf.head}"
-    else q"$buf"
-  }
-
 
   def pp[T <: Tree](t: T): T = {
     println(showCode(t))
@@ -30,10 +19,24 @@ class QuoteImpl(val c: Context) extends Nodes with Liftables with Unliftables {
   }
 
   def apply[T](args: Tree*): Tree = {
-    val xml = parts.init.zipWithIndex.map {
+    val nodes = parsedXml
+    assert(nodes.size == 1)
+    q"${nodes.head}"
+  }
+
+  def applySeq[T](args: Tree*): Tree = {
+    val nodes = parsedXml
+    assert(nodes.size > 1)
+    q"$nodes"
+  }
+
+  private def parsedXml = {
+    val xmlStr = parts.init.zipWithIndex.map {
       case (part, i) => s"$part${Hole(i)}"
     }.mkString("", "", parts.last)
-    pp(wrap(parse(xml)))
+
+    val parser = new QuoteParser(io.Source.fromString(xmlStr), true)
+    parser.initialize.content(xml.TopScope)
   }
 }
 
