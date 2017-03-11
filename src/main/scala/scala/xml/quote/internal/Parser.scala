@@ -3,6 +3,7 @@ package internal
 
 import scala.xml._
 import scala.xml.parsing._
+import scala.xml.quote.internal.QuoteImpl.Hole
 
 trait QuoteHandler extends ConstructingHandler {
   def unparsed(pos: Int, data: String): Unparsed = Unparsed(data)
@@ -10,12 +11,19 @@ trait QuoteHandler extends ConstructingHandler {
   def group(pos: Int, elems: NodeSeq): Group = Group(elems)
 }
 
-final class QuoteParser(val input: io.Source, val preserveWS: Boolean)
+final class QuoteParser(val inputs: Seq[io.Source], val placeholders: Seq[Hole], val preserveWS: Boolean)
     extends QuoteHandler
     with MarkupParser
     with ExternalSources {
 
   def handle: QuoteHandler = this
+
+  private val inputsIt = inputs.iterator
+
+  override val input = inputsIt.next()
+  val placeholderIt = placeholders.iterator
+
+  curInput = input
 
   override def element1(pscope: NamespaceBinding): NodeSeq = {
     val pos = this.pos
@@ -50,9 +58,33 @@ final class QuoteParser(val input: io.Source, val preserveWS: Boolean)
     }
   }
 
+  var needPlaceholder = false
+
+  override def ch: Char = {
+    if (nextChNeeded) {
+      val c = super.ch
+      if (c != 0) {
+        c
+      } else {
+        if (inputsIt.hasNext) {
+          curInput = inputsIt.next()
+          nextChNeeded = true
+          reachedEof = false
+          needPlaceholder = true
+          super.ch
+        } else {
+          c
+        }
+      }
+    } else {
+      lastChRead
+    }
+  }
+
   override def content(pscope: NamespaceBinding): NodeSeq = {
     val ts = new NodeBuffer
     var exit = eof
+
     // todo: optimize seq repr.
     def done = NodeSeq.fromSeq(ts.toList)
 
@@ -64,6 +96,11 @@ final class QuoteParser(val input: io.Source, val preserveWS: Boolean)
         return done
 
       ch match {
+        case _ if needPlaceholder =>
+          println("PUT PS")
+          ts &+ placeholderIt.next()
+          needPlaceholder = false
+
         case '<' => // another tag
           nextch(); ch match {
             case '/' => exit = true // end tag
@@ -83,6 +120,7 @@ final class QuoteParser(val input: io.Source, val preserveWS: Boolean)
               xToken(';')
               ts &+ handle.entityRef(tmppos, n)
           }
+
         case _ => // text content
           appendText(tmppos, ts, xText)
       }

@@ -1,6 +1,7 @@
 package scala.xml.quote.internal
 
 import scala.reflect.macros.whitebox.Context
+import scala.xml.quote.internal.QuoteImpl.Hole
 
 trait Liftables extends Nodes {
   val c: Context
@@ -9,6 +10,8 @@ trait Liftables extends Nodes {
 
   val sx = q"_root_.scala.xml"
   val sci = q"_root_.scala.collection.immutable"
+
+  val args: List[Tree]
 
   def NullableLiftable[T](f: T => Tree): Liftable[T] = Liftable { v =>
     if (v == null) q"null"
@@ -108,6 +111,7 @@ trait Liftables extends Nodes {
     case pcdata:   xml.PCData   => liftPCData(pcdata)
     case text:     xml.Text     => liftText(text)
     case unparsed: xml.Unparsed => liftUnparsed(unparsed)
+    case hole:     Hole         => args(hole.data)
     case atom:     xml.Atom[_]  =>
       atom.data match {
         case c: Char   => q"new $sx.Atom($c)"
