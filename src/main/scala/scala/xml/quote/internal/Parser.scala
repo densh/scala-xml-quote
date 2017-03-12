@@ -97,7 +97,6 @@ final class QuoteParser(val inputs: Seq[io.Source], val placeholders: Seq[Hole],
 
       ch match {
         case _ if needPlaceholder =>
-          println("PUT PS")
           ts &+ placeholderIt.next()
           needPlaceholder = false
 
