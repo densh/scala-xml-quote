@@ -127,6 +127,51 @@ final class QuoteParser(val inputs: Seq[io.Source], val placeholders: Seq[Hole],
     done
   }
 
+  def xAttributeValueIfPresent(): Either[Hole, String] = {
+    ch match {
+      case _ if needPlaceholder =>
+        Left(placeholderIt.next())
+
+      case _ => Right(xAttributeValue())
+    }
+  }
+
+  override def xAttributes(pscope: NamespaceBinding): (MetaData, NamespaceBinding) = {
+    var scope: NamespaceBinding = pscope
+    var aMap: MetaData = Null
+    while (isNameStart(ch)) {
+      val qname = xName
+      xEQ() // side effect
+      val value = xAttributeValueIfPresent()
+      val stringValue = value.right.getOrElse("HOLE")
+      val nodeValue = value.fold(identity, Text(_))
+
+      Utility.prefix(qname) match {
+        case Some("xmlns") =>
+          val prefix = qname.substring(6 /*xmlns:*/ , qname.length)
+          scope = new NamespaceBinding(prefix, stringValue, scope)
+
+        case Some(prefix) =>
+          val key = qname.substring(prefix.length + 1, qname.length)
+          aMap = new PrefixedAttribute(prefix, key, nodeValue, aMap)
+
+        case _ =>
+          if (qname == "xmlns")
+            scope = new NamespaceBinding(null, stringValue, scope)
+          else
+            aMap = new UnprefixedAttribute(qname, nodeValue, aMap)
+      }
+
+      if ((ch != '/') && (ch != '>') && ('?' != ch))
+        xSpace()
+    }
+
+    if (!aMap.wellformed(scope))
+      reportSyntaxError("double attribute")
+
+    (aMap, scope)
+  }
+
   def xUnparsed: NodeSeq =
     xTakeUntil(handle.unparsed, () => pos, "</xml:unparsed>")
 

@@ -13,6 +13,8 @@ trait Liftables extends Nodes {
 
   val args: List[Tree]
 
+  lazy val argsIterator: Iterator[Tree] = args.iterator
+
   def NullableLiftable[T](f: T => Tree): Liftable[T] = Liftable { v =>
     if (v == null) q"null"
     else f(v)
@@ -111,7 +113,7 @@ trait Liftables extends Nodes {
     case pcdata:   xml.PCData   => liftPCData(pcdata)
     case text:     xml.Text     => liftText(text)
     case unparsed: xml.Unparsed => liftUnparsed(unparsed)
-    case hole:     Hole         => args(hole.data)
+    case hole:     Hole         => argsIterator.next
     case atom:     xml.Atom[_]  =>
       atom.data match {
         case c: Char   => q"new $sx.Atom($c)"
