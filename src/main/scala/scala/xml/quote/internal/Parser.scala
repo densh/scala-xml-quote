@@ -3,7 +3,6 @@ package internal
 
 import scala.xml._
 import scala.xml.parsing._
-import scala.xml.quote.internal.QuoteImpl.Hole
 
 trait QuoteHandler extends ConstructingHandler {
   def unparsed(pos: Int, data: String): Unparsed = Unparsed(data)
@@ -11,7 +10,7 @@ trait QuoteHandler extends ConstructingHandler {
   def group(pos: Int, elems: NodeSeq): Group = Group(elems)
 }
 
-final class QuoteParser(val inputs: Seq[io.Source], val placeholders: Seq[Hole], val preserveWS: Boolean)
+final class QuoteParser(val inputs: Seq[io.Source], val preserveWS: Boolean)
     extends QuoteHandler
     with MarkupParser
     with ExternalSources {
@@ -21,7 +20,6 @@ final class QuoteParser(val inputs: Seq[io.Source], val placeholders: Seq[Hole],
   private val inputsIt = inputs.iterator
 
   override val input = inputsIt.next()
-  val placeholderIt = placeholders.iterator
 
   curInput = input
 
@@ -97,7 +95,7 @@ final class QuoteParser(val inputs: Seq[io.Source], val placeholders: Seq[Hole],
 
       ch match {
         case _ if needPlaceholder =>
-          ts &+ placeholderIt.next()
+          ts &+ Placeholder
           needPlaceholder = false
 
         case '<' => // another tag
@@ -127,12 +125,14 @@ final class QuoteParser(val inputs: Seq[io.Source], val placeholders: Seq[Hole],
     done
   }
 
-  def xAttributeValueIfPresent(): Either[Hole, String] = {
+  def xAttributeValueIfPresent(): (Node, String) = {
     ch match {
       case _ if needPlaceholder =>
-        Left(placeholderIt.next())
+        (Placeholder, "")
 
-      case _ => Right(xAttributeValue())
+      case _ =>
+        val v = xAttributeValue()
+        (Text(v), v)
     }
   }
 
@@ -142,9 +142,7 @@ final class QuoteParser(val inputs: Seq[io.Source], val placeholders: Seq[Hole],
     while (isNameStart(ch)) {
       val qname = xName
       xEQ() // side effect
-      val value = xAttributeValueIfPresent()
-      val stringValue = value.right.getOrElse("HOLE")
-      val nodeValue = value.fold(identity, Text(_))
+      val (nodeValue, stringValue) = xAttributeValueIfPresent()
 
       Utility.prefix(qname) match {
         case Some("xmlns") =>

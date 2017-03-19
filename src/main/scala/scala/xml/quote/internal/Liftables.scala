@@ -1,7 +1,6 @@
 package scala.xml.quote.internal
 
 import scala.reflect.macros.whitebox.Context
-import scala.xml.quote.internal.QuoteImpl.Hole
 
 trait Liftables extends Nodes {
   val c: Context
@@ -113,7 +112,6 @@ trait Liftables extends Nodes {
     case pcdata:   xml.PCData   => liftPCData(pcdata)
     case text:     xml.Text     => liftText(text)
     case unparsed: xml.Unparsed => liftUnparsed(unparsed)
-    case hole:     Hole         => argsIterator.next
     case atom:     xml.Atom[_]  =>
       atom.data match {
         case c: Char   => q"new $sx.Atom($c)"
@@ -128,6 +126,7 @@ trait Liftables extends Nodes {
     case procinstr: xml.ProcInstr => liftProcInstr(procinstr)
     case entityref: xml.EntityRef => liftEntityRef(entityref)
     case unquote:   Unquote       => liftUnquote(unquote)
+    case Placeholder              => argsIterator.next
   }
 
   implicit def liftGroup: Liftable[xml.Group] = Liftable {
