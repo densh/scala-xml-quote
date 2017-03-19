@@ -10,12 +10,18 @@ trait QuoteHandler extends ConstructingHandler {
   def group(pos: Int, elems: NodeSeq): Group = Group(elems)
 }
 
-final class QuoteParser(val input: io.Source, val preserveWS: Boolean)
+final class QuoteParser(val inputs: Seq[io.Source], val preserveWS: Boolean)
     extends QuoteHandler
     with MarkupParser
     with ExternalSources {
 
   def handle: QuoteHandler = this
+
+  private val inputsIt = inputs.iterator
+
+  override val input = inputsIt.next()
+
+  curInput = input
 
   override def element1(pscope: NamespaceBinding): NodeSeq = {
     val pos = this.pos
@@ -50,9 +56,33 @@ final class QuoteParser(val input: io.Source, val preserveWS: Boolean)
     }
   }
 
+  var needPlaceholder = false
+
+  override def ch: Char = {
+    if (nextChNeeded) {
+      val c = super.ch
+      if (c != 0) {
+        c
+      } else {
+        if (inputsIt.hasNext) {
+          curInput = inputsIt.next()
+          nextChNeeded = true
+          reachedEof = false
+          needPlaceholder = true
+          super.ch
+        } else {
+          c
+        }
+      }
+    } else {
+      lastChRead
+    }
+  }
+
   override def content(pscope: NamespaceBinding): NodeSeq = {
     val ts = new NodeBuffer
     var exit = eof
+
     // todo: optimize seq repr.
     def done = NodeSeq.fromSeq(ts.toList)
 
@@ -64,6 +94,10 @@ final class QuoteParser(val input: io.Source, val preserveWS: Boolean)
         return done
 
       ch match {
+        case _ if needPlaceholder =>
+          ts &+ Placeholder
+          needPlaceholder = false
+
         case '<' => // another tag
           nextch(); ch match {
             case '/' => exit = true // end tag
@@ -83,11 +117,57 @@ final class QuoteParser(val input: io.Source, val preserveWS: Boolean)
               xToken(';')
               ts &+ handle.entityRef(tmppos, n)
           }
+
         case _ => // text content
           appendText(tmppos, ts, xText)
       }
     }
     done
+  }
+
+  def xAttributeValueIfPresent(): (Node, String) = {
+    ch match {
+      case _ if needPlaceholder =>
+        (Placeholder, "")
+
+      case _ =>
+        val v = xAttributeValue()
+        (Text(v), v)
+    }
+  }
+
+  override def xAttributes(pscope: NamespaceBinding): (MetaData, NamespaceBinding) = {
+    var scope: NamespaceBinding = pscope
+    var aMap: MetaData = Null
+    while (isNameStart(ch)) {
+      val qname = xName
+      xEQ() // side effect
+      val (nodeValue, stringValue) = xAttributeValueIfPresent()
+
+      Utility.prefix(qname) match {
+        case Some("xmlns") =>
+          val prefix = qname.substring(6 /*xmlns:*/ , qname.length)
+          scope = new NamespaceBinding(prefix, stringValue, scope)
+
+        case Some(prefix) =>
+          val key = qname.substring(prefix.length + 1, qname.length)
+          aMap = new PrefixedAttribute(prefix, key, nodeValue, aMap)
+
+        case _ =>
+          if (qname == "xmlns")
+            scope = new NamespaceBinding(null, stringValue, scope)
+          else
+            aMap = new UnprefixedAttribute(qname, nodeValue, aMap)
+      }
+
+      if ((ch != '/') && (ch != '>') && ('?' != ch))
+        xSpace()
+    }
+
+    if (!aMap.wellformed(scope))
+      reportSyntaxError("double attribute")
+
+    (aMap, scope)
   }
 
   def xUnparsed: NodeSeq =

@@ -10,6 +10,10 @@ trait Liftables extends Nodes {
   val sx = q"_root_.scala.xml"
   val sci = q"_root_.scala.collection.immutable"
 
+  val args: List[Tree]
+
+  lazy val argsIterator: Iterator[Tree] = args.iterator
+
   def NullableLiftable[T](f: T => Tree): Liftable[T] = Liftable { v =>
     if (v == null) q"null"
     else f(v)
@@ -122,6 +126,7 @@ trait Liftables extends Nodes {
     case procinstr: xml.ProcInstr => liftProcInstr(procinstr)
     case entityref: xml.EntityRef => liftEntityRef(entityref)
     case unquote:   Unquote       => liftUnquote(unquote)
+    case Placeholder              => argsIterator.next
   }
 
   implicit def liftGroup: Liftable[xml.Group] = Liftable {
