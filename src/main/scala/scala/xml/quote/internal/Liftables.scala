@@ -1,25 +1,33 @@
-package scala.xml.quote.internal
+package scala.xml.quote
+package internal
 
-import scala.reflect.macros.whitebox.Context
-import scala.xml.quote.internal.QuoteImpl.Hole
+import scala.language.implicitConversions
+import scala.reflect.macros.whitebox
+import scala.xml.quote.internal.{parsed => p}
 
-trait Liftables extends Nodes {
-  val c: Context
+trait Liftables {
+  val c: whitebox.Context
   import c.universe._
-  import c.universe.internal.reificationSupport.{SyntacticBlock => SynBlock}
 
   val args: List[Tree]
 
   val sx = q"_root_.scala.xml"
-  val sci = q"_root_.scala.collection.immutable"
 
-  def NullableLiftable[T](f: T => Tree): Liftable[T] = Liftable { v =>
-    if (v == null) q"null"
-    else f(v)
-  }
+  implicit def liftNode(implicit isTopScope: Boolean): Liftable[p.Node] =
+    Liftable {
+      case n: p.Group     => liftGroup(isTopScope)(n)
+      case n: p.Elem      => liftElem(isTopScope)(n)
+      case n: p.Text      => liftText(n)
+      case n: p.ScalaExpr => liftScalaExp(n)
+      case n: p.Comment   => liftComment(n)
+      case n: p.PCData    => liftPCData(n)
+      case n: p.ProcInstr => liftProcInstr(n)
+      case n: p.Unparsed  => liftUnparsed(n)
+      case n: p.EntityRef => liftEntityRef(n)
+    }
 
-  implicit val liftNodeBuffer: Liftable[xml.NodeSeq] = Liftable { b =>
-    val additions = b.map { node => q"$$buf &+ $node" }
+  implicit def liftNodeSeq(implicit isTopScope: Boolean): Liftable[Seq[p.Node]] = Liftable { nodes =>
+    val additions = nodes.map { node => q"$$buf &+ $node" }
     q"""
       {
         val $$buf = new $sx.NodeBuffer
@@ -29,131 +37,81 @@ trait Liftables extends Nodes {
     """
   }
 
-  implicit val liftComment: Liftable[xml.Comment] = Liftable { c =>
+  def liftGroup(implicit isTopScope: Boolean): Liftable[p.Group] = Liftable { gr =>
+    q"new $sx.Group(${gr.nodes})"
+  }
+
+  def liftElem(implicit isTopScope: Boolean): Liftable[p.Elem] = Liftable { e =>
+    def liftAttributes(atts: Seq[p.Attribute]) = {
+      val nil: Tree = q"$sx.Null"
+      atts.foldRight(nil) {
+        case (a, next) =>
+          val prefix = a.pre.fold(q"null: String": Tree)(p => q"$p")
+          val value = a.value match {
+            case Seq(value) => q"$value"
+            case values     => q"$values"
+          }
+          q"$sx.Attribute($prefix, ${a.key}, $value, $next)"
+      }
+    }
+
+    def liftNameSpaces(nss: Seq[p.Attribute]): Tree = {
+      val scope: Tree = if (isTopScope) q"$sx.TopScope" else q"$$scope"
+      nss.foldLeft(scope) {
+        case (parent, ns) =>
+          val prefix = if (ns.pre.isDefined) q"${ns.key}" else q"null: String"
+          val uri = ns.value.head match {
+            case p.Text(text) => q"$text"
+            case scalaExpr    => q"$scalaExpr"
+          }
+          q"$sx.NamespaceBinding($prefix, $uri, $parent)"
+      }
+    }
+
+    def isNameSpace(a: p.Attribute) = a.pre.contains("xmlns")
+    val (nss, atts) = e.attributes.partition(isNameSpace)
+
+    def hasValidURI(ns: p.Attribute) = ns.value match {
+      case Seq(_: p.Text | _: p.ScalaExpr) => true
+      case _                               => false
+    }
+    require(nss.forall(hasValidURI))
+
+    val attributes = liftAttributes(atts)
+    val scope = liftNameSpaces(nss)
+    //implicit val isTopScopeNext: Boolean = isTopScope && nss.isEmpty
+    val prefix = e.prefix.fold(q"null": Tree)(p => q"$p")
+    q"""
+      val $$scope = $scope
+      $sx.Elem($prefix, ${e.label}, $attributes, $$scope, false, ${e.children}: _*)
+     """
+  }
+
+  val liftText: Liftable[p.Text] = Liftable { t =>
+    q"new $sx.Text(${t.text})"
+  }
+
+  val liftScalaExp: Liftable[p.ScalaExpr] = Liftable { se =>
+    args(se.id - 1)
+  }
+
+  val liftComment: Liftable[p.Comment] = Liftable { c =>
     q"new $sx.Comment(${c.commentText})"
   }
 
-  implicit val liftText: Liftable[xml.Text] = Liftable {
-    case xml.Text(Hole(i)) => args(i)
-    case t => q"new $sx.Text(${t.text})"
-  }
-
-  implicit val liftEntityRef: Liftable[xml.EntityRef] = Liftable { er =>
-    q"new $sx.EntityRef(${er.entityName})"
-  }
-
-  implicit val liftUnquote: Liftable[Unquote] = Liftable { _.tree }
-
-  implicit val liftProcInstr: Liftable[xml.ProcInstr] = Liftable { pi =>
-    q"new $sx.ProcInstr(${pi.target}, ${pi.proctext})"
-  }
-
-  implicit val liftUnparsed: Liftable[xml.Unparsed] = Liftable { u =>
-    q"new $sx.Unparsed(${u.data})"
-  }
-
-  implicit val liftPCData: Liftable[xml.PCData] = Liftable { pcd =>
+  val liftPCData: Liftable[p.PCData] = Liftable { pcd =>
     q"new $sx.PCData(${pcd.data})"
   }
 
-  implicit def liftNamespaceBinding: Liftable[xml.NamespaceBinding] = NullableLiftable { ns =>
-    if (ns eq xml.TopScope) q"$sx.TopScope"
-    else {
-      val value = ns.uri match {
-        case Hole(i) => args(i)
-        case s       => q"$s"
-      }
-      q"new $sx.NamespaceBinding(${ns.prefix}, $value, ${ns.parent})"
-    }
+  val liftProcInstr: Liftable[p.ProcInstr] = Liftable { pi =>
+    q"new $sx.ProcInstr(${pi.target}, ${pi.proctext})"
   }
 
-  implicit def liftElem(implicit outer: xml.NamespaceBinding = xml.TopScope): Liftable[xml.Elem] =
-    Liftable { elem =>
-      def liftMeta(meta: xml.MetaData): List[Tree] = meta match {
-        case xml.Null =>
-          q"var $$md: $sx.MetaData = $sx.Null" :: Nil
-        case xml.UnprefixedAttribute(key, Seq(value), rest) =>
-          q"$$md = new $sx.UnprefixedAttribute($key, $value, $$md)" :: liftMeta(rest)
-        case xml.PrefixedAttribute(pre, key, Seq(value), rest) =>
-          q"$$md = new $sx.PrefixedAttribute($pre, $key, $value, $$md)" :: liftMeta(rest)
-      }
-
-      val (metapre, metaval) =
-        if (elem.attributes.isEmpty) (Nil, q"$sx.Null")
-        else (liftMeta(elem.attributes).reverse, q"$$md")
-
-      val children =
-        if (elem.child.isEmpty) q""
-        else {
-          val outer = 'shadowed
-          implicit val current: xml.NamespaceBinding = elem.scope
-          val additions = elem.child.map { node => q"$$buf &+ $node" }
-          q"""{
-            val $$buf = new $sx.NodeBuffer
-            ..$additions
-            $$buf
-          }: _*"""
-        }
-
-      def scoped(tree: Tree) = {
-        def distinct(ns: xml.NamespaceBinding): List[(String, String)] =
-          if (ns == null || ns.eq(outer) || ns.eq(xml.TopScope)) Nil
-          else {
-            val xml.NamespaceBinding(pre, uri, innerns) = ns
-            (pre, uri) :: distinct(innerns)
-          }
-
-        val bindings = distinct(elem.scope)
-        if (bindings.isEmpty) tree
-        else {
-          val q"..$stats" = tree
-          val scopes = bindings.reverse.map { case (pre, uri) =>
-            q"$$tmpscope = new $sx.NamespaceBinding($pre, $uri, $$tmpscope)"
-          }
-          q"""
-            var $$tmpscope: $sx.NamespaceBinding = $$scope
-            ..$scopes
-            ${SynBlock(q"val $$scope: $sx.NamespaceBinding = $$tmpscope" :: stats)}
-          """
-        }
-      }
-
-    scoped(q"""
-      ..$metapre
-      new $sx.Elem(${elem.prefix}, ${elem.label}, $metaval, ${elem.scope},
-                   ${elem.minimizeEmpty}, ..$children)
-    """)
+  val liftUnparsed: Liftable[p.Unparsed] = Liftable { u =>
+    q"new $sx.Unparsed(${u.data})"
   }
 
-  implicit val liftAtom: Liftable[xml.Atom[_]] = Liftable {
-    case pcdata:   xml.PCData   => liftPCData(pcdata)
-    case text:     xml.Text     => liftText(text)
-    case unparsed: xml.Unparsed => liftUnparsed(unparsed)
-    case atom:     xml.Atom[_]  =>
-      atom.data match {
-        case c: Char   => q"new $sx.Atom($c)"
-        case s: String => q"new $sx.Atom($s)"
-        case v         => throw new Exception(s"unsupported atom value: $v (${v.getClass})")
-      }
+  val liftEntityRef: Liftable[p.EntityRef] = Liftable { er =>
+    q"new $sx.EntityRef(${er.entityName})"
   }
-
-  implicit val liftSpecialNode: Liftable[xml.SpecialNode] = Liftable {
-    case atom:      xml.Atom[_]   => liftAtom(atom)
-    case comment:   xml.Comment   => liftComment(comment)
-    case procinstr: xml.ProcInstr => liftProcInstr(procinstr)
-    case entityref: xml.EntityRef => liftEntityRef(entityref)
-    case unquote:   Unquote       => liftUnquote(unquote)
-  }
-
-  implicit def liftGroup: Liftable[xml.Group] = Liftable {
-    case xml.Group(nodes) =>
-      q"new $sx.Group($sci.Seq(..$nodes))"
-  }
-
-  implicit def liftNode(implicit outer: xml.NamespaceBinding = xml.TopScope): Liftable[xml.Node] =
-    Liftable {
-      case elem:  xml.Elem        => liftElem(outer)(elem)
-      case snode: xml.SpecialNode => liftSpecialNode(snode)
-      case group: xml.Group       => liftGroup(group)
-    }
 }

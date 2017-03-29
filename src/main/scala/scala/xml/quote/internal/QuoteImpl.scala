@@ -1,11 +1,10 @@
 package scala.xml.quote.internal
 
-import scala.Predef.{any2stringadd => _, _}
 import scala.language.experimental.macros
-import scala.reflect.macros.whitebox.Context
+import scala.reflect.macros.whitebox
 import scala.xml.quote.internal.QuoteImpl.Hole
 
-class QuoteImpl(val c: Context) extends Nodes with Liftables with Unliftables {
+class QuoteImpl(val c: whitebox.Context) extends Liftables /*with Unliftables*/ {
   import c.universe._
 
   lazy val (parts, args) = c.macroApplication match {
@@ -21,22 +20,26 @@ class QuoteImpl(val c: Context) extends Nodes with Liftables with Unliftables {
   def apply[T](args: Tree*): Tree = {
     val nodes = parsedXml
     assert(nodes.size == 1)
+
+    implicit val isTopScope: Boolean = true
     q"${nodes.head}"
   }
 
   def applySeq[T](args: Tree*): Tree = {
     val nodes = parsedXml
     assert(nodes.size > 1)
+
+    implicit val isTopScope: Boolean = true
     q"$nodes"
   }
 
-  private def parsedXml = {
+  private def parsedXml: Seq[parsed.Node] = {
     val xmlStr = parts.init.zipWithIndex.map {
       case (part, i) => s"$part${Hole(i)}"
     }.mkString("", "", parts.last)
 
-    val parser = new QuoteParser(io.Source.fromString(xmlStr), true)
-    parser.initialize.content(xml.TopScope)
+    val parser = new XmlParser
+    parser.XmlExpr.parse(xmlStr).get.value
   }
 }
 
