@@ -13,7 +13,7 @@ class XmlParser(WL: P0 = CharsWhile(_.isWhitespace)) extends TokenTests {
 
   val ScalaExpr     = P( CharsWhile(Hole.isScalaExpr).! ).map(se => p.ScalaExpr(Hole.decode(se).get))
   val ScalaPatterns = ScalaExpr
-  
+
   val XmlExpr: P[Seq[p.Node]] = P( WL.? ~ Xml.XmlContent.rep(min = 1, sep = WL.?) ~ WL.? ~ End )
   val XmlPattern: P[p.Node]   = P( WL.? ~ Xml.ElemPattern ~ WL.? )
 
@@ -61,7 +61,7 @@ class XmlParser(WL: P0 = CharsWhile(_.isWhitespace)) extends TokenTests {
 
     val Reference = P( EntityRef | CharRef )
     val EntityRef = P( "&" ~ Name.! ~/ ";" ).map(p.EntityRef)
-    val CharRef   = P( "&#" ~ Num ~/ ";" | "&#x" ~ HexNum ~/ ";" ).map(c => p.Text(c.toString))
+    val CharRef   = P( "&#" ~ Num ~ ";" | "&#x" ~ HexNum ~ ";" ).map(c => p.Text(c.toString))
     val Num       = P( CharIn('0' to '9').rep.! ).map(n => p.charValueOf(n))
     val HexNum    = P( CharIn('0' to '9', 'a' to 'f', 'A' to 'F').rep.! ).map(n => p.charValueOf(n, 16))
 

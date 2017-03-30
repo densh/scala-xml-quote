@@ -19,7 +19,7 @@ class QuoteImpl(val c: blackbox.Context) extends Liftables /*with Unliftables*/ 
     assert(nodes.size == 1)
 
     implicit val isTopScope: Boolean = true
-    pp(q"${nodes.head}")
+    q"${nodes.head}"
   }
 
   def applySeq[T](args: Tree*): Tree = {
