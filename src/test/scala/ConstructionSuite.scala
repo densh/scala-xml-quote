@@ -84,9 +84,32 @@ class ConstructionSuite extends FunSuite {
    assert(xml"<foo a:b=${"foo" + "bar"}/>" ≡≡ <foo a:b={"foo" + "bar"}/>)
   }
 
-   test("reconstruct unquote within namespaced elem") {
-     assert(xml"""<foo xmlns:pre=${"foo" + "bar"}/>""" ≡≡ <foo xmlns:pre={"foo" + "bar"}/>)
-   }
+  test("reconstruct unquote within namespaced elem") {
+    assert(xml"""<foo xmlns:pre=${"foo" + "bar"}/>""" ≡≡ <foo xmlns:pre={"foo" + "bar"}/>)
+  }
+
+  test("reconstruct nested interpolator") {
+    val xml1 =
+      xml"""<a xmlns:pre="scope0">${ xml"<b/>" }</a>"""
+
+    val xml2 = <a xmlns:pre="scope0">{ <b/> }</a>
+    assert(xml1 ≡≡ xml2)
+  }
+
+  test("reconstruct multiline element") {
+    val xml1 = xml"""
+      <a>
+        <b/>
+      </a>
+    """
+
+    val xml2 =
+      <a>
+        <b/>
+      </a>
+
+    assert(xml1 ≡≡ xml2)
+  }
 }
 
 object ConstructionSuite {

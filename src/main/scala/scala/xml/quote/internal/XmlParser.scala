@@ -8,15 +8,14 @@ import scala.xml.quote.internal.QuoteImpl.Hole
 
 // FIXME Name should not end by :
 // FIXME tag must be balanced
-class XmlParser(WL: P0 = CharsWhile(_.isWhitespace, 0)) extends TokenTests {
+class XmlParser(WL: P0 = CharsWhile(_.isWhitespace)) extends TokenTests {
   import internal.{parsed => p}
 
   val ScalaExpr     = P( CharsWhile(Hole.isScalaExpr).! ).map(se => p.ScalaExpr(Hole.decode(se).get))
   val ScalaPatterns = ScalaExpr
-
-  // TODO Maybe Xml.XmlContent.rep
-  val XmlExpr: P[Seq[p.Node]] = P( WL ~ Xml.XmlContent ~ (WL ~ Xml.Element).rep ~ End ).map { case (n, ns) => n +: ns }
-  val XmlPattern: P[p.Node]   = P( WL ~ Xml.ElemPattern )
+  
+  val XmlExpr: P[Seq[p.Node]] = P( WL.? ~ Xml.XmlContent.rep(min = 1, sep = WL.?) ~ WL.? ~ End )
+  val XmlPattern: P[p.Node]   = P( WL.? ~ Xml.ElemPattern ~ WL.? )
 
   private[this] object Xml {
 
