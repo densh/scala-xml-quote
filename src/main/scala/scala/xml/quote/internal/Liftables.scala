@@ -2,11 +2,11 @@ package scala.xml.quote
 package internal
 
 import scala.language.implicitConversions
-import scala.reflect.macros.whitebox
+import scala.reflect.macros.blackbox
 import scala.xml.quote.internal.{parsed => p}
 
 trait Liftables {
-  val c: whitebox.Context
+  val c: blackbox.Context
   import c.universe._
 
   val args: List[Tree]
@@ -79,12 +79,25 @@ trait Liftables {
 
     val attributes = liftAttributes(atts)
     val scope = liftNameSpaces(nss)
-    //implicit val isTopScopeNext: Boolean = isTopScope && nss.isEmpty
-    val prefix = e.prefix.fold(q"null": Tree)(p => q"$p")
-    q"""
-      val $$scope = $scope
-      $sx.Elem($prefix, ${e.label}, $attributes, $$scope, false, ${e.children}: _*)
-     """
+
+    val _isTopScope = isTopScope;
+    {
+      implicit val isTopScope: Boolean = _isTopScope && nss.isEmpty
+      val prefix = e.prefix.fold(q"null: String": Tree)(p => q"$p")
+      val minimizeEmpty = q"${e.children.isEmpty}"
+
+      if (nss.isEmpty)
+        q"$sx.Elem($prefix, ${e.label}, $attributes, $scope, $minimizeEmpty, ${e.children}: _*)"
+      else {
+        q"""
+          val $$tmpscope = $scope;
+          {
+            val $$scope = $$tmpscope
+            $sx.Elem($prefix, ${e.label}, $attributes, $$scope, $minimizeEmpty, ${e.children}: _*)
+          }
+        """
+      }
+    }
   }
 
   val liftText: Liftable[p.Text] = Liftable { t =>
@@ -92,7 +105,7 @@ trait Liftables {
   }
 
   val liftScalaExp: Liftable[p.ScalaExpr] = Liftable { se =>
-    args(se.id - 1)
+    args(se.id)
   }
 
   val liftComment: Liftable[p.Comment] = Liftable { c =>

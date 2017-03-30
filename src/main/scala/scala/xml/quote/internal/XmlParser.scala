@@ -11,8 +11,7 @@ import scala.xml.quote.internal.QuoteImpl.Hole
 class XmlParser(WL: P0 = CharsWhile(_.isWhitespace, 0)) extends TokenTests {
   import internal.{parsed => p}
 
-  //
-  val ScalaExpr     = P( CharsWhile(Hole.isScalaExpr).! ).map(se => p.ScalaExpr(se.length))
+  val ScalaExpr     = P( CharsWhile(Hole.isScalaExpr).! ).map(se => p.ScalaExpr(Hole.decode(se).get))
   val ScalaPatterns = ScalaExpr
 
   // TODO Maybe Xml.XmlContent.rep

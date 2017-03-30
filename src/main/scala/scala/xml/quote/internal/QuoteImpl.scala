@@ -1,16 +1,13 @@
 package scala.xml.quote.internal
 
 import scala.language.experimental.macros
-import scala.reflect.macros.whitebox
+import scala.reflect.macros.blackbox
 import scala.xml.quote.internal.QuoteImpl.Hole
 
-class QuoteImpl(val c: whitebox.Context) extends Liftables /*with Unliftables*/ {
+class QuoteImpl(val c: blackbox.Context) extends Liftables /*with Unliftables*/ {
   import c.universe._
 
-  lazy val (parts, args) = c.macroApplication match {
-    case q"$_($_(..${parts: List[String]})).xml.apply[..$_](..$args)"  => (parts, args)
-    case q"$_($_(..${parts: List[String]})).xmls.apply[..$_](..$args)" => (parts, args)
-  }
+  lazy val q"$_($_(..${parts: List[String]})).${_ /* xml(s) */}.apply[..$_](..$args)" = c.macroApplication
 
   def pp[T <: Tree](t: T): T = {
     println(showCode(t))
@@ -35,7 +32,7 @@ class QuoteImpl(val c: whitebox.Context) extends Liftables /*with Unliftables*/ 
 
   private def parsedXml: Seq[parsed.Node] = {
     val xmlStr = parts.init.zipWithIndex.map {
-      case (part, i) => s"$part${Hole(i)}"
+      case (part, i) => s"$part${Hole.encode(i)}"
     }.mkString("", "", parts.last)
 
     val parser = new XmlParser
@@ -50,10 +47,12 @@ object QuoteImpl {
 
     def isScalaExpr(c: Char): Boolean = c == char
 
-    def apply(i: Int): String = char.toString * (i + 1)
+    def encode(i: Int): String = char.toString * (i + 1)
 
-    def unapply(s: String): Option[Int] =
+    def decode(s: String): Option[Int] = {
       if (s.forall(isScalaExpr)) Some(s.length - 1)
       else None
+    }
+
   }
 }

@@ -1,9 +1,9 @@
 package scala.xml.quote.internal
 
-import scala.reflect.macros.whitebox.Context
+import scala.reflect.macros.blackbox
 
 trait Nodes {
-  val c: Context
+  val c: blackbox.Context
   import c.universe._
 
   case class Unquote(tree: Tree) extends xml.SpecialNode {
