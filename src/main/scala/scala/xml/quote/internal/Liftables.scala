@@ -1,5 +1,4 @@
-package scala.xml.quote
-package internal
+package scala.xml.quote.internal
 
 import scala.language.implicitConversions
 import scala.reflect.macros.blackbox
@@ -11,7 +10,31 @@ trait Liftables {
 
   val args: List[Tree]
 
-  val sx = q"_root_.scala.xml"
+  private val sx = q"_root_.scala.xml"
+
+  /** When we lift, we don't know if we are within an enclosing xml element
+    * which defines a scope. In some cases we will have to fix the scope.
+    *
+    * E.g:
+    * {{{
+    *   xml"""<a xmlns:pre="scope0">${ xml"<b/>" }</a>"""
+    * }}}
+    * Here the scope of `b` is `TopScope` but should be `scope0`
+    */
+  def fixScopes(tree: Tree): Tree = {
+    val typed = c.typecheck(tree)
+
+    var scopeSym = NoSymbol
+    c.internal.typingTransform(typed)((tree, api) => tree match {
+      case q"$_.TopScope" if scopeSym != NoSymbol =>
+        api.typecheck(q"$scopeSym")
+      case q"val $$scope$$ = $_" => // this assignment is only here when creating new scope
+        scopeSym = tree.symbol
+        api.default(tree)
+      case _ =>
+        api.default(tree)
+    })
+  }
 
   implicit def liftNode(implicit isTopScope: Boolean): Liftable[p.Node] =
     Liftable {
@@ -56,7 +79,7 @@ trait Liftables {
     }
 
     def liftNameSpaces(nss: Seq[p.Attribute]): Tree = {
-      val scope: Tree = if (isTopScope) q"$sx.TopScope" else q"$$scope"
+      val scope: Tree = if (isTopScope) q"$sx.TopScope" else q"$$scope$$"
       nss.foldLeft(scope) {
         case (parent, ns) =>
           val prefix = if (ns.pre.isDefined) q"${ns.key}" else q"null: String"
@@ -92,8 +115,8 @@ trait Liftables {
         q"""
           val $$tmpscope = $scope;
           {
-            val $$scope = $$tmpscope
-            $sx.Elem($prefix, ${e.label}, $attributes, $$scope, $minimizeEmpty, ${e.children}: _*)
+            val $$scope$$ = $$tmpscope
+            $sx.Elem($prefix, ${e.label}, $attributes, $$scope$$, $minimizeEmpty, ${e.children}: _*)
           }
         """
       }

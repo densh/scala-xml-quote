@@ -2,24 +2,18 @@ package scala.xml.quote.internal
 
 import scala.language.experimental.macros
 import scala.reflect.macros.blackbox
-import scala.xml.quote.internal.QuoteImpl.Hole
 
 class QuoteImpl(val c: blackbox.Context) extends Liftables /*with Unliftables*/ {
   import c.universe._
 
   lazy val q"$_($_(..${parts: List[String]})).${_ /* xml(s) */}.apply[..$_](..$args)" = c.macroApplication
 
-  def pp[T <: Tree](t: T): T = {
-    println(showCode(t))
-    t
-  }
-
   def apply[T](args: Tree*): Tree = {
     val nodes = parsedXml
     assert(nodes.size == 1)
 
     implicit val isTopScope: Boolean = true
-    q"${nodes.head}"
+    fixScopes(q"${nodes.head}")
   }
 
   def applySeq[T](args: Tree*): Tree = {
@@ -27,16 +21,23 @@ class QuoteImpl(val c: blackbox.Context) extends Liftables /*with Unliftables*/ 
     assert(nodes.size > 1)
 
     implicit val isTopScope: Boolean = true
-    q"$nodes"
+    fixScopes(q"$nodes")
   }
 
   private def parsedXml: Seq[parsed.Node] = {
+    import QuoteImpl.Hole
+
     val xmlStr = parts.init.zipWithIndex.map {
       case (part, i) => s"$part${Hole.encode(i)}"
     }.mkString("", "", parts.last)
 
     val parser = new XmlParser
     parser.XmlExpr.parse(xmlStr).get.value
+  }
+
+  def pp[T <: Tree](t: T): T = {
+    println(showCode(t))
+    t
   }
 }
 
