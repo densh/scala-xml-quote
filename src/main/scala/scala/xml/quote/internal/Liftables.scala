@@ -7,39 +7,16 @@ import scala.xml.quote.internal.{parsed => p}
 trait Liftables {
   val c: blackbox.Context
   import c.universe._
+  import Liftables.{Scope, TopScope}
 
   val args: List[Tree]
 
   private val sx = q"_root_.scala.xml"
 
-  /** When we lift, we don't know if we are within an enclosing xml element
-    * which defines a scope. In some cases we will have to fix the scope.
-    *
-    * E.g:
-    * {{{
-    *   xml"""<a xmlns:pre="scope0">${ xml"<b/>" }</a>"""
-    * }}}
-    * Here the scope of `b` is `TopScope` but should be `scope0`
-    */
-  def fixScopes(tree: Tree): Tree = {
-    val typed = c.typecheck(tree)
-
-    var scopeSym = NoSymbol
-    c.internal.typingTransform(typed)((tree, api) => tree match {
-      case q"$_.TopScope" if scopeSym != NoSymbol =>
-        api.typecheck(q"$scopeSym")
-      case q"val $$scope$$ = $_" => // this assignment is only here when creating new scope
-        scopeSym = tree.symbol
-        api.default(tree)
-      case _ =>
-        api.default(tree)
-    })
-  }
-
-  implicit def liftNode(implicit isTopScope: Boolean): Liftable[p.Node] =
+  implicit def liftNode(implicit outer: Scope = TopScope): Liftable[p.Node] =
     Liftable {
-      case n: p.Group     => liftGroup(isTopScope)(n)
-      case n: p.Elem      => liftElem(isTopScope)(n)
+      case n: p.Group     => liftGroup(outer)(n)
+      case n: p.Elem      => liftElem(outer)(n)
       case n: p.Text      => liftText(n)
       case n: p.ScalaExpr => liftScalaExp(n)
       case n: p.Comment   => liftComment(n)
@@ -49,8 +26,8 @@ trait Liftables {
       case n: p.EntityRef => liftEntityRef(n)
     }
 
-  implicit def liftNodeSeq(implicit isTopScope: Boolean): Liftable[Seq[p.Node]] = Liftable { nodes =>
-    val additions = nodes.map { node => q"$$buf &+ $node" }
+  implicit def liftNodeSeq(implicit outer: Scope = TopScope): Liftable[Seq[p.Node]] = Liftable { nodes =>
+    val additions = nodes.map(node => q"$$buf &+ $node")
     q"""
       {
         val $$buf = new $sx.NodeBuffer
@@ -60,66 +37,89 @@ trait Liftables {
     """
   }
 
-  def liftGroup(implicit isTopScope: Boolean): Liftable[p.Group] = Liftable { gr =>
+  def liftGroup(implicit outer: Scope): Liftable[p.Group] = Liftable { gr =>
     q"new $sx.Group(${gr.nodes})"
   }
 
-  def liftElem(implicit isTopScope: Boolean): Liftable[p.Elem] = Liftable { e =>
-    def liftAttributes(atts: Seq[p.Attribute]) = {
-      val nil: Tree = q"$sx.Null"
-      atts.foldRight(nil) {
-        case (a, next) =>
-          val prefix = a.pre.fold(q"null: String": Tree)(p => q"$p")
-          val value = a.value match {
-            case Seq(value) => q"$value"
-            case values     => q"$values"
-          }
-          q"$sx.Attribute($prefix, ${a.key}, $value, $next)"
+  def liftElem(implicit outer: Scope): Liftable[p.Elem] = Liftable { e =>
+    def outerScope =
+      if (outer.isTopScope) q"$sx.TopScope"
+      else q"$$scope$$"
+
+    def liftAttributes(atts: Seq[p.Attribute]): Seq[Tree] = {
+      val init: Tree = q"var $$md: $sx.MetaData = $sx.Null"
+
+      val metas = atts.reverse.map { a =>
+        val prefix = a.pre.fold(q"null: String": Tree)(p => q"$p")
+        val value = a.value match {
+          case Seq(v) => q"$v"
+          case vs     => q"$vs"
+        }
+        q"$$md = $sx.Attribute($prefix, ${a.key}, $value, $$md)"
       }
+
+      init +: metas
     }
 
-    def liftNameSpaces(nss: Seq[p.Attribute]): Tree = {
-      val scope: Tree = if (isTopScope) q"$sx.TopScope" else q"$$scope$$"
-      nss.foldLeft(scope) {
-        case (parent, ns) =>
-          val prefix = if (ns.pre.isDefined) q"${ns.key}" else q"null: String"
-          val uri = ns.value.head match {
-            case p.Text(text) => q"$text"
-            case scalaExpr    => q"$scalaExpr"
-          }
-          q"$sx.NamespaceBinding($prefix, $uri, $parent)"
+    def liftNameSpaces(nss: Seq[p.Attribute]): Seq[Tree] = {
+      val init: Tree = q"var $$tmpscope: $sx.NamespaceBinding = $outerScope"
+
+      val scopes = nss.map { ns =>
+        val prefix = if (ns.pre.isDefined) q"${ns.key}" else q"null: String"
+        val uri = ns.value.head match {
+          case p.Text(text) => q"$text"
+          case scalaExpr    => q"$scalaExpr"
+        }
+        q"$$tmpscope = $sx.NamespaceBinding($prefix, $uri, $$tmpscope)"
       }
+
+      init +: scopes
     }
 
-    def isNameSpace(a: p.Attribute) = a.pre.contains("xmlns")
+    // wrong but like scalac: xmlnsfoo is a namespace
+    def isNameSpace(a: p.Attribute) = a.name.startsWith("xmlns")
     val (nss, atts) = e.attributes.partition(isNameSpace)
 
-    def hasValidURI(ns: p.Attribute) = ns.value match {
-      case Seq(_: p.Text | _: p.ScalaExpr) => true
-      case _                               => false
+    require {
+      def hasValidURI(ns: p.Attribute) = ns.value match {
+        case Seq(_: p.Text | _: p.ScalaExpr) => true
+        case _                               => false
+      }
+      nss.forall(hasValidURI)
     }
-    require(nss.forall(hasValidURI))
 
-    val attributes = liftAttributes(atts)
-    val scope = liftNameSpaces(nss)
+    val prefix = e.prefix.fold(q"null: String": Tree)(p => q"$p")
 
-    val _isTopScope = isTopScope;
-    {
-      implicit val isTopScope: Boolean = _isTopScope && nss.isEmpty
-      val prefix = e.prefix.fold(q"null: String": Tree)(p => q"$p")
-      val minimizeEmpty = q"${e.children.isEmpty}"
+    val (metapre, metaval) =
+      if (atts.isEmpty) (Nil, q"$sx.Null")
+      else (liftAttributes(atts), q"$$md")
 
-      if (nss.isEmpty)
-        q"$sx.Elem($prefix, ${e.label}, $attributes, $scope, $minimizeEmpty, ${e.children}: _*)"
-      else {
-        q"""
-          val $$tmpscope = $scope;
+    val _outer = outer
+    val children = {
+      implicit val outer: Scope = new Scope(_outer.isTopScope && nss.isEmpty)
+      q"${e.children}"
+    }
+
+    if (nss.isEmpty) {
+      q"""
+        {
+          ..$metapre
+          $sx.Elem($prefix, ${e.label}, $metaval, $outerScope, ${e.minimizeEmpty}, $children: _*)
+        }
+       """
+    } else {
+      val scopepre = liftNameSpaces(nss)
+      q"""
+        {
+          ..$scopepre
+
           {
             val $$scope$$ = $$tmpscope
-            $sx.Elem($prefix, ${e.label}, $attributes, $$scope$$, $minimizeEmpty, ${e.children}: _*)
+            ..$metapre
+            $sx.Elem($prefix, ${e.label}, $metaval, $$scope$$, ${e.minimizeEmpty}, $children: _*)
           }
-        """
-      }
+        }
+       """
     }
   }
 
@@ -150,4 +150,9 @@ trait Liftables {
   val liftEntityRef: Liftable[p.EntityRef] = Liftable { er =>
     q"new $sx.EntityRef(${er.entityName})"
   }
+}
+
+private[internal] object Liftables {
+  class Scope(val isTopScope: Boolean) extends AnyVal
+  final val TopScope = new Scope(true)
 }

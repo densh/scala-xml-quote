@@ -20,11 +20,12 @@ class XmlParser(WL: P0 = CharsWhile(_.isWhitespace)) extends TokenTests {
   private[this] object Xml {
 
     val Element: P[p.Node] = P( TagHeader ~/ (EmptyElemTagEnd | ">" ~/ Content ~/ ETag ) ).map {
-      case (qname, atts, children) => p.Node(qname, atts, children)
+      case (qname, atts, Some(children)) => p.Node(qname, atts, minimizeEmpty = false, children)
+      case (qname, atts, _)              => p.Node(qname, atts, minimizeEmpty = true, Nil)
     }
     val TagHeader        = P( "<" ~ TagName.! ~/ (WL ~ Attribute).rep ~ WL.? )
     val TagName          = P( !"xml:unparsed" ~ Name )
-    val EmptyElemTagEnd  = P( "/>" ).map(_ => Seq.empty[p.Node])
+    val EmptyElemTagEnd  = P( "/>" ).map(_ => None)
     val ETag             = P( "</" ~ TagName ~ WL.? ~ ">" )
 
     val Attribute = P( Name.! ~ Eq ~ AttValue ).map {
@@ -38,7 +39,7 @@ class XmlParser(WL: P0 = CharsWhile(_.isWhitespace)) extends TokenTests {
       ScalaExpr
     )
 
-    val Content               = P( (CharData | Reference | ScalaExpr | XmlContent).rep )
+    val Content               = P( (CharData | Reference | ScalaExpr | XmlContent).rep ).map(Some.apply)
     val XmlContent: P[p.Node] = P( Element | CDSect | PI | Comment | Unparsed )
 
     val Unparsed = P( UnpStart ~/ UnpData.! ~ UnpEnd ).map(p.Unparsed)
@@ -51,13 +52,14 @@ class XmlParser(WL: P0 = CharsWhile(_.isWhitespace)) extends TokenTests {
     val CData   = P( (!"]]>" ~ Char).rep )
     val CDEnd   = P( "]]>" )
 
-    val Comment = P( "<!--" ~/ ((!"-" ~ Char) | ("-" ~ (!"-" ~ Char))).rep.! ~ "-->" ).map(p.Comment)
+    val Comment = P( "<!--" ~/ ComText.! ~ "-->" ).map(p.Comment)
+    val ComText = P( (!"--" ~ Char).rep ~ ("-" ~ &("--")).? )
 
-    val PI = P( "<?" ~ PITarget.! ~ PIProcText.?.! ~ "?>" ).map {
-      case (target, text) => p.ProcInstr(target, text)
+    val PI = P( "<?" ~ PITarget.! ~ PIProcText.? ~ "?>" ).map {
+      case (target, text) => p.ProcInstr(target, text.getOrElse(""))
     }
-    val PIProcText = P( WL ~ (!"?>" ~ Char).rep )
     val PITarget   = P( !(("X" | "x") ~ ("M" | "m") ~ ("L" | "l")) ~ Name )
+    val PIProcText = P( WL ~ (!"?>" ~ Char).rep.! )
 
     val Reference = P( EntityRef | CharRef )
     val EntityRef = P( "&" ~ Name.! ~/ ";" ).map(p.EntityRef)
@@ -77,11 +79,12 @@ class XmlParser(WL: P0 = CharsWhile(_.isWhitespace)) extends TokenTests {
     val NameChar  = P( CharPred(isNameChar) )
 
     val ElemPattern: P[p.Node] = P( TagPHeader ~/ (EmptyElemTagEnd | ">" ~/ ContentP ~/ ETag ) ).map {
-      case (qname, children) => p.Node(qname, Nil, children)
+      case (qname, Some(children)) => p.Node(qname, Nil, minimizeEmpty = false, children)
+      case (qname, _)              => p.Node(qname, Nil, minimizeEmpty = true, Nil)
     }
     val TagPHeader = P( "<" ~ TagName.! ~ WL.?  )
 
-    val ContentP  = P( (ElemPattern | CharDataP | ScalaPatterns).rep )
+    val ContentP  = P( (ElemPattern | CharDataP | ScalaPatterns).rep ).map(Some.apply)
     val CharDataP = P( "&" ~ CharData.? | CharData ).!.map(p.Text) // matches weirdness of scalac parser on xml reference.
   }
 }

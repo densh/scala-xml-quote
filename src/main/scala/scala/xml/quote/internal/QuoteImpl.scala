@@ -10,17 +10,13 @@ class QuoteImpl(val c: blackbox.Context) extends Liftables /*with Unliftables*/ 
 
   def apply[T](args: Tree*): Tree = {
     val nodes = parsedXml
-    assert(nodes.size == 1)
+    assert(nodes.size == 1, "Use xmls with mutiple elements")
 
-    implicit val isTopScope: Boolean = true
     fixScopes(q"${nodes.head}")
   }
 
   def applySeq[T](args: Tree*): Tree = {
     val nodes = parsedXml
-    assert(nodes.size > 1)
-
-    implicit val isTopScope: Boolean = true
     fixScopes(q"$nodes")
   }
 
@@ -33,6 +29,30 @@ class QuoteImpl(val c: blackbox.Context) extends Liftables /*with Unliftables*/ 
 
     val parser = new XmlParser
     parser.XmlExpr.parse(xmlStr).get.value
+  }
+
+  /** When we lift, we don't know if we are within an enclosing xml element
+    * which defines a scope. In some cases we will have to fix the scope.
+    *
+    * E.g:
+    * {{{
+    *   xml"""<a xmlns:pre="scope0">${ xml"<b/>" }</a>"""
+    * }}}
+    * Here the scope of `b` is `TopScope` but should be `scope0`
+    */
+  private def fixScopes(tree: Tree): Tree = {
+    val typed = c.typecheck(tree)
+
+    var scopeSym = NoSymbol
+    c.internal.typingTransform(typed)((tree, api) => tree match {
+      case q"$_.TopScope" if scopeSym != NoSymbol =>
+        api.typecheck(q"$scopeSym")
+      case q"val $$scope$$ = $_" => // this assignment is only here when creating new scope
+        scopeSym = tree.symbol
+        api.default(tree)
+      case _ =>
+        api.default(tree)
+    })
   }
 
   def pp[T <: Tree](t: T): T = {

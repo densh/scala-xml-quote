@@ -7,18 +7,50 @@ private[internal] object parsed {
   sealed trait Node
 
   object Node {
-    def apply(qname: String, attributes: Seq[Attribute], children: Seq[Node]): Node = {
+    def apply(qname: String,
+              attributes: Seq[Attribute],
+              minimizeEmpty: Boolean,
+              children: Seq[Node]): Node = {
+
       val duplicates = attributes
         .groupBy(a => a.pre.fold(a.key)(pre => s"$pre:${a.key}"))
         .collect { case (key, as) if as.size > 1 => key }
       require(duplicates.isEmpty, s"attribute(s) ${duplicates.mkString(", ")} may only be defined once")
 
-      if (qname == "xml:group") {
-        Group(children)
+      val child =
+        if (XmlSettings.isCoalescing) coalesce(children)
+        else children
+
+      if (qname == "xml:group" && !minimizeEmpty) { // <xml:group/> is Elem in scalac
+        Group(child)
       } else {
         val (prefix, label) = prefixAndName(qname)
-        Elem(prefix, label, attributes, children)
+        Elem(prefix, label, attributes, minimizeEmpty, child)
       }
+    }
+
+    /** Merge text sections */
+    private def coalesce(nodes: Seq[Node]): Seq[Node] = {
+      val buf = new ListBuffer[Node]
+      val sb = new StringBuilder
+
+      def purgeText() = {
+        if (sb.nonEmpty) {
+          buf += Text(sb.result())
+          sb.clear()
+        }
+      }
+
+      nodes.foreach {
+        case Text(text)   => sb ++= text
+        case PCData(data) => sb ++= data
+        case n =>
+          purgeText()
+          buf += n
+      }
+
+      purgeText()
+      buf.toList
     }
   }
 
@@ -33,6 +65,7 @@ private[internal] object parsed {
   final case class Elem(prefix: Option[String],
                         label: String,
                         attributes: Seq[Attribute],
+                        minimizeEmpty: Boolean,
                         children: Seq[Node]) extends Node
 
   /** <foo>text</foo> */
@@ -59,7 +92,9 @@ private[internal] object parsed {
     *
     * @param value is `Text` or `{scalaExpression}`
     */
-  final case class Attribute(pre: Option[String], key: String, value: Seq[Node])
+  final case class Attribute(pre: Option[String], key: String, value: Seq[Node]) {
+    def name: String = pre.fold(key)(p => s"$p:$key")
+  }
 
   object Attribute {
 
