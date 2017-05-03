@@ -18,8 +18,9 @@ class UnquoteSuite extends XmlQuoteSuite {
     assert(xml"<foo a=${"foo"}/>" ≈ <foo a={"foo"}/>)
     assert(xml"<foo a=${<bar/>}/>" ≈ <foo a={<bar/>}/>)
     assert(xml"<foo a=${<bar/><bat/>}/>" ≈ <foo a={<bar/><bat/>}/>)
-
     assert(xml"<a b=${None}/>" ≈ <a b={None}/>)
+
+    """ xml"<a b=${1} />" """ shouldNot typeCheck
   }
 
   test("unquote iterable") {
@@ -32,5 +33,12 @@ class UnquoteSuite extends XmlQuoteSuite {
 
   test("unquote unit") {
     assert(xml"<a>${}</a>" ≈ <a>{}</a>)
+  }
+
+  test("unquote within namespace") {
+    assert(xml"<foo xmlns=${"foo"}/>" ≈ <foo xmlns={"foo"}/>)
+    
+    """ xml"<a xmlns=${<b/>} />" """ shouldNot typeCheck
+    """ xml"<a xmlns=${None} />" """ shouldNot typeCheck
   }
 }

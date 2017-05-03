@@ -35,6 +35,13 @@ class SimpleNodeSuite extends XmlQuoteSuite {
     assert(xml"""<foo a='"'/>""" ≈ <foo a='"'/>)
   }
 
+  test("reconstruct Text") {
+    assert(xml"<a>Hello</a>" ≈ <a>Hello</a>)
+    assert(xml"<a>></a>" ≈ <a>></a>)
+    assert(xml"<a>{</a>" ≈ <a>{{</a>)
+    assert(xml"<a>}</a>" ≈ <a>}}</a>)
+  }
+
   test("reconstruct EntityRef") {
     assert(xml"<foo>&name;</foo>" ≈ <foo>&name;</foo>)
     assert(xml"<foo>&lt;</foo>" ≈ <foo>&lt;</foo>)
