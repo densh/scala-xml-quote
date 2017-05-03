@@ -1,6 +1,5 @@
 package scala.xml.quote.internal
 
-import scala.language.experimental.macros
 import scala.reflect.macros.blackbox
 
 class QuoteImpl(val c: blackbox.Context) extends Liftables /*with Unliftables*/ {

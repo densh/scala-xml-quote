@@ -1,6 +1,5 @@
 package scala.xml.quote.internal
 
-import scala.language.implicitConversions
 import scala.reflect.macros.blackbox
 import scala.xml.quote.internal.{parsed => p}
 
