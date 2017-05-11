@@ -3,7 +3,7 @@ package scala.xml.quote
 class SimpleNodeSuite extends XmlQuoteSuite {
 
   test("reconstruct sequence of nodes") {
-    assert(xmls"<foo/><bar/>" ≈ <foo/><bar/>)
+    assert(xml"<foo/><bar/>" ≈ <foo/><bar/>)
   }
 
   test("reconstruct minimized elem") {
@@ -28,6 +28,11 @@ class SimpleNodeSuite extends XmlQuoteSuite {
 
   test("reconstruct elem with prefixed attributes") {
     assert(xml"""<foo a:a="a" b:b="b"/>""" ≈ <foo a:a="a" b:b="b"/>)
+  }
+
+  test("reconstruct elem with attributes") {
+    assert(xml"""<foo a="'"/>""" ≈ <foo a="'"/>)
+    assert(xml"""<foo a='"'/>""" ≈ <foo a='"'/>)
   }
 
   test("reconstruct EntityRef") {
@@ -89,7 +94,7 @@ class SimpleNodeSuite extends XmlQuoteSuite {
   test("reconstruct coalescing elems") {
     assert(xml"<![CDATA[hello, world]]>" ≈ <![CDATA[hello, world]]>)
 
-    assert(xmls"<![CDATA[hello, world]]><![CDATA[hello, world]]>" ≈
+    assert(xml"<![CDATA[hello, world]]><![CDATA[hello, world]]>" ≈
       <![CDATA[hello, world]]><![CDATA[hello, world]]>)
 
     assert(xml"<foo>x<![CDATA[hello, world]]></foo>" ≈

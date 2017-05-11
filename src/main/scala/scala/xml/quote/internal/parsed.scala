@@ -71,7 +71,7 @@ private[internal] object parsed {
   /** <foo>text</foo> */
   final case class Text(text: String) extends Node
 
-  final case class ScalaExpr(id: Int) extends Node
+  final case class Placeholder(id: Int) extends Node
 
   /** <!--commentText--> */
   final case class Comment(commentText: String) extends Node
@@ -103,7 +103,7 @@ private[internal] object parsed {
       Attribute(pre, key, normalizeAttValue(value))
     }
 
-    def apply(qname: String, value: ScalaExpr): Attribute = {
+    def apply(qname: String, value: Placeholder): Attribute = {
       val (pre, key) = prefixAndName(qname)
       Attribute(pre, key, Seq(value))
     }
