@@ -59,7 +59,7 @@ class QuoteImpl(val c: whitebox.Context) extends Liftables {
   }
 }
 
-private object QuoteImpl {
+object QuoteImpl {
   import fastparse.all._
   val parser = new XmlParser(Hole.Parser.map(Placeholder))
 }

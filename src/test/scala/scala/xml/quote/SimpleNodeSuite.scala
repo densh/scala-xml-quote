@@ -39,9 +39,11 @@ class SimpleNodeSuite extends XmlQuoteSuite {
     assert(xml"<foo>&name;</foo>" ≈ <foo>&name;</foo>)
     assert(xml"<foo>&lt;</foo>" ≈ <foo>&lt;</foo>)
     assert(xml"<foo>Hello &name;!</foo>" ≈ <foo>Hello &name;!</foo>)
+    assert(xml"<foo>&na:me;</foo>" ≈ <foo>&na:me;</foo>)
 
     // In attribute position
     assert(xml"""<foo a="&name;" />""" ≈ <foo a="&name;" />)
+    assert(xml"""<foo a="&na:me;" />""" ≈ <foo a="&na:me;" />)
     assert(xml"""<foo a="&lt;" />""" ≈ <foo a="&lt;" />)
     assert(xml"""<foo a="Hello &name;!"/>""" ≈ <foo a="Hello &name;!"/>)
     assert(xml"""<foo a="1 &lt; 2"/>""" ≈ <foo a="1 &lt; 2"/>)
@@ -83,6 +85,9 @@ class SimpleNodeSuite extends XmlQuoteSuite {
     assert(xml"<?foo bar?>" ≈ <?foo bar?>)
     assert(xml"<?foo?>" ≈ <?foo?>)
     assert(xml"<?foo     ?>" ≈ <?foo     ?>)
+    assert(xml"<?foo   bar?>" ≈ <?foo   bar?>)
+    assert(xml"<?foo??>" ≈ <?foo??>)
+    assert(xml"<?foo<bar?>" ≈ <?foo<bar?>)
   }
 
   test("reconstruct unparsed") {

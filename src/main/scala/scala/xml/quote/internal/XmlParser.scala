@@ -6,9 +6,9 @@ import fastparse.all._
 import scala.xml.parsing.TokenTests
 import internal.{parsed => p}
 
-// FIXME Name should not end by :
 // FIXME tag must be balanced
 private[internal] class XmlParser(Hole: P[p.Placeholder]) extends TokenTests {
+  import XmlParser._
 
   private val WL = CharsWhile(_.isWhitespace).opaque("whitespace")
 
@@ -21,11 +21,11 @@ private[internal] class XmlParser(Hole: P[p.Placeholder]) extends TokenTests {
       case (qname, atts, children: Seq[p.Node @unchecked]) => p.Node(qname, atts, minimizeEmpty = false, children)
       case (qname, atts, _)                                => p.Node(qname, atts, minimizeEmpty = true, Nil)
     }
-    val TagHeader        = P( "<" ~ Name.! ~/ (WL ~ Attribute).rep ~ WL.? )
+    val TagHeader        = P( "<" ~ Name ~/ (WL ~ Attribute).rep ~ WL.? )
     val EmptyElemTagEnd  = P( "/>" )
-    val ETag             = P( "</" ~ Name ~ WL.? ~ ">" )
+    val ETag             = P( "</" ~ Name.toP0 ~ WL.? ~ ">" )
 
-    val Attribute = P( Name.! ~ Eq ~ AttValue ).map {
+    val Attribute = P( Name ~ Eq ~ AttValue ).map {
       case (qname, sc: p.Placeholder) => p.Attribute(qname, sc)
       case (qname, value: String)   => p.Attribute(qname, value)
     }
@@ -42,9 +42,9 @@ private[internal] class XmlParser(Hole: P[p.Placeholder]) extends TokenTests {
     val ScalaExpr = Hole
 
     val Unparsed = P( UnpStart ~/ UnpData.! ~ UnpEnd ).map(p.Unparsed)
-    val UnpStart = P( "<xml:unparsed" ~ (WL ~ Attribute).rep ~ WL.? ~ ">" ).map(_ => Unit): P0 // discard attributes
+    val UnpStart = P( "<xml:unparsed" ~ (WL ~ Attribute.toP0).rep ~ WL.? ~ ">" )
     val UnpEnd   = P( "</xml:unparsed>" )
-    val UnpData  = P( (!UnpEnd ~ AnyChar).rep )
+    val UnpData  = P( (!UnpEnd ~ Char).rep )
 
     val CDSect  = P( CDStart ~/ CData.! ~ CDEnd ).map(p.PCData)
     val CDStart = P( "<![CDATA[" )
@@ -54,14 +54,13 @@ private[internal] class XmlParser(Hole: P[p.Placeholder]) extends TokenTests {
     val Comment = P( "<!--" ~/ ComText.! ~ "-->" ).map(p.Comment)
     val ComText = P( (!"--" ~ Char).rep ~ ("-" ~ &("--")).? )
 
-    val PI = P( "<?" ~ PITarget.! ~ PIProcText.? ~ "?>" ).map {
-      case (target, text) => p.ProcInstr(target, text.getOrElse(""))
+    val PI = P( "<?" ~ Name ~ WL.? ~ PIProcText.! ~ "?>" ).map {
+      case (target, text) => p.ProcInstr(target, text)
     }
-    val PITarget   = P( !(("X" | "x") ~ ("M" | "m") ~ ("L" | "l")) ~ Name )
-    val PIProcText = P( WL ~ (!"?>" ~ Char).rep.! )
+    val PIProcText = P( (!"?>" ~ Char).rep )
 
     val Reference = P( EntityRef | CharRef )
-    val EntityRef = P( "&" ~ Name.! ~/ ";" ).map(p.EntityRef)
+    val EntityRef = P( "&" ~ Name ~/ ";" ).map(p.EntityRef)
     val CharRef   = P( "&#" ~ Num ~ ";" | "&#x" ~ HexNum ~ ";" ).map(c => p.Text(c.toString))
     val Num       = P( CharIn('0' to '9').rep.! ).map(n => p.charValueOf(n))
     val HexNum    = P( CharIn('0' to '9', 'a' to 'f', 'A' to 'F').rep.! ).map(n => p.charValueOf(n, 16))
@@ -72,7 +71,7 @@ private[internal] class XmlParser(Hole: P[p.Placeholder]) extends TokenTests {
     val CharQ = P( !"\"" ~ Char1 )
     val CharA = P( !"'" ~ Char1 )
 
-    val Name      = P( NameStart ~ NameChar.rep ).opaque("Name")
+    val Name      = P( NameStart ~ NameChar.rep ).!.filter(_.last != ':').opaque("Name")
     val NameStart = P( CharPred(isNameStart) )
     val NameChar  = P( CharPred(isNameChar) )
 
@@ -80,10 +79,17 @@ private[internal] class XmlParser(Hole: P[p.Placeholder]) extends TokenTests {
       case (qname, children: Seq[p.Node @unchecked]) => p.Node(qname, Nil, minimizeEmpty = false, children)
       case (qname, _)                                => p.Node(qname, Nil, minimizeEmpty = true, Nil)
     }
-    val TagPHeader = P( "<" ~ Name.! ~ WL.?  )
+    val TagPHeader = P( "<" ~ Name ~ WL.?  )
 
     val ContentP      = P( (ScalaPatterns | ElemPattern | CharDataP ).rep )
     val CharDataP     = P( "&" ~ CharData.? | CharData ).!.map(p.Text) // matches weirdness of scalac parser on xml reference.
     val ScalaPatterns = ScalaExpr
+  }
+}
+
+private object XmlParser {
+  implicit class ParserOps[T](val p: P[T]) extends AnyVal {
+    /** Discard the result of this parser */
+    def toP0: P0 = p.map(_ => Unit)
   }
 }
