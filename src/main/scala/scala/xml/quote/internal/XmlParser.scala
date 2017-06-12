@@ -69,7 +69,7 @@ private[internal] class XmlParser(Hole: P[p.Placeholder]) extends TokenTests {
     val CDEnd   = P( "]]>" )
 
     val Comment = P( Index ~ "<!--" ~/ ComText.! ~ "-->" ).map { case (pos, text) => p.Comment(text, pos) }
-    val ComText = P( (!"--" ~ Char).rep ~ ("-" ~ &("--")).? )
+    val ComText = P( (!"-->" ~ Char).rep )
 
     val PI = P( Index ~ "<?" ~ Name ~ S.? ~ PIProcText.! ~ "?>" ).map {
       case (pos, target, text) => p.ProcInstr(target, text, pos)
