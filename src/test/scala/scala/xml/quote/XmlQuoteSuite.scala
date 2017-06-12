@@ -1,8 +1,8 @@
 package scala.xml.quote
 
-import org.scalatest.FunSuite
+import org.scalatest.{FunSuite, Matchers}
 
-abstract class XmlQuoteSuite extends FunSuite {
+abstract class XmlQuoteSuite extends FunSuite with Matchers {
 
   implicit class NodeOps(val self: xml.Node) {
     /** Like `==` with scope comparison */

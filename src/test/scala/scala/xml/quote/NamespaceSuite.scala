@@ -32,5 +32,11 @@ class NamespaceSuite extends XmlQuoteSuite {
     val b = <b/>
     assert(xml"""<a xmlns:pre="scope0">${ xml"<b/>" }</a>""" !≈
       xml"""<a xmlns:pre="scope0">$b</a>""")
+
+    val _ = xml"""<a xmlns="1">${ () => xml"<b/>" }</a>""" // should compile
+  }
+
+  test("invalid namespace") {
+    " xml\"\"\"<a xmlns=\"&a;&b;\" />\"\"\" " shouldNot typeCheck
   }
 }

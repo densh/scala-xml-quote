@@ -1,79 +1,86 @@
 package scala.xml.quote.internal
 
-import scala.language.experimental.macros
-import scala.reflect.macros.blackbox
+import fastparse.all._
 
-class QuoteImpl(val c: blackbox.Context) extends Liftables /*with Unliftables*/ {
+import scala.collection.mutable.ArrayBuffer
+import scala.reflect.macros.whitebox
+import scala.xml.quote.internal.QuoteImpl._
+
+class QuoteImpl(val c: whitebox.Context) extends Liftables with Transform {
   import c.universe._
 
-  lazy val q"$_($_(..${parts: List[String]})).${_ /* xml(s) */}.apply[..$_](..$args)" = c.macroApplication
+  private lazy val q"$_($_(..$parts)).xml.apply[..$_](..$args)" = c.macroApplication
 
   def apply[T](args: Tree*): Tree = {
-    val nodes = parsedXml
-    assert(nodes.size == 1, "Use xmls with mutiple elements")
-
-    fixScopes(q"${nodes.head}")
+    val nodes = transform(parsedXml)
+    lift(nodes)
   }
 
-  def applySeq[T](args: Tree*): Tree = {
-    val nodes = parsedXml
-    fixScopes(q"$nodes")
+  private[internal] def arg(i: Int): Tree = args(i)
+
+  private[internal] def abort(offset: Int, msg: String): Nothing = {
+    val pos = correspondingPosition(offset)
+    c.abort(pos, msg)
   }
 
-  private def parsedXml: Seq[parsed.Node] = {
-    import QuoteImpl.Hole
+  private lazy val (xmlStr, offsets) = {
+    val sb = new StringBuilder
+    val poss = ArrayBuffer.empty[Int]
 
-    val xmlStr = parts.init.zipWithIndex.map {
-      case (part, i) => s"$part${Hole.encode(i)}"
-    }.mkString("", "", parts.last)
+    def appendPart(part: Tree) = {
+      val q"${value: String}" = part
+      poss += sb.length
+      sb ++= value
+      poss += sb.length
+    }
 
-    val parser = new XmlParser
-    parser.XmlExpr.parse(xmlStr).get.value
+    def appendHole(i: Int) =
+      sb ++= Hole.encode(i)
+
+    for ((part, i) <- parts.init.zipWithIndex) {
+      appendPart(part)
+      appendHole(i)
+    }
+    appendPart(parts.last)
+
+    (sb.toString, poss.toArray)
   }
 
-  /** When we lift, we don't know if we are within an enclosing xml element
-    * which defines a scope. In some cases we will have to fix the scope.
-    *
-    * E.g:
-    * {{{
-    *   xml"""<a xmlns:pre="scope0">${ xml"<b/>" }</a>"""
-    * }}}
-    * Here the scope of `b` is `TopScope` but should be `scope0`
-    */
-  private def fixScopes(tree: Tree): Tree = {
-    val typed = c.typecheck(tree)
+  /** Given an offset in the xmlString computes the corresponding position */
+  private def correspondingPosition(offset: Int): Position = {
+    val index = offsets.lastIndexWhere(offset >= _)
+    val isWithinHoleOrAtTheEnd = index % 2 != 0
 
-    var scopeSym = NoSymbol
-    c.internal.typingTransform(typed)((tree, api) => tree match {
-      case q"$_.TopScope" if scopeSym != NoSymbol =>
-        api.typecheck(q"$scopeSym")
-      case q"val $$scope$$ = $_" => // this assignment is only here when creating new scope
-        scopeSym = tree.symbol
-        api.default(tree)
-      case _ =>
-        api.default(tree)
-    })
+    if (isWithinHoleOrAtTheEnd) {
+      val prevPartIndex = (index - 1) / 2
+      val pos = parts(prevPartIndex).pos
+      val posOffset = offset - offsets(index - 1)
+      pos.withPoint(pos.point + posOffset)
+    } else {
+      val partIndex = index / 2
+      val pos = parts(partIndex).pos
+      val posOffset = offset - offsets(index)
+      pos.withPoint(pos.point + posOffset)
+    }
+  }
+
+  private def parsedXml: Seq[ast.Node] = {
+    xmlParser.XmlExpr.parse(xmlStr) match {
+      case Parsed.Success(nodes, _) => nodes
+      case Parsed.Failure(expected, offset, _) =>
+        abort(offset, s"expected: $expected")
+    }
   }
 
   def pp[T <: Tree](t: T): T = {
-    println(showCode(t))
+    println(showCode(t, printIds = true))
     t
   }
 }
 
-object QuoteImpl {
-
-  private[internal] object Hole {
-    private val char = 0xE000.toChar // withing private use area
-
-    def isScalaExpr(c: Char): Boolean = c == char
-
-    def encode(i: Int): String = char.toString * (i + 1)
-
-    def decode(s: String): Option[Int] = {
-      if (s.forall(isScalaExpr)) Some(s.length - 1)
-      else None
-    }
-
+private object QuoteImpl {
+  val xmlParser = {
+    val Placeholder = P( Index ~ Hole.Parser ).map { case (pos, id) => ast.Placeholder(id, pos) }
+    new XmlParser(Placeholder)
   }
 }
