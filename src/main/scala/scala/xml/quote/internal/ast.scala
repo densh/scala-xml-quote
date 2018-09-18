@@ -14,7 +14,7 @@ private[internal] object ast {
   /** <xml:group><node1/><node2/></xml:group> */
   final case class Group(nodes: Seq[Node], pos: Position) extends Node
 
-  /** <prefix:label attributeKey:"attributeValue">
+  /** <prefix:label attributeKey="attributeValue">
     *   <child1/>
     *   <child2/>
     * </prefix:label>
@@ -40,7 +40,7 @@ private[internal] object ast {
   /** <![CDATA[data]]> */
   final case class PCData(data: String, pos: Position) extends Node
 
-  /** <?foo bar?> */
+  /** <?target proctext?> */
   final case class ProcInstr(target: String, proctext: String, pos: Position) extends Node
 
   /** <xml:unparsed>data</xml:unparsed> */

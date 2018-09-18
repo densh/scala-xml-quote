@@ -43,7 +43,7 @@ private[internal] class XmlParser(Hole: P[p.Placeholder]) extends TokenTests {
 //    def TagRest(name: String) = P( "/>" | ">" ~/ Content ~/ ETag(name) ): P[Any] // P[Unit | Seq[p.Node]]
 //    def ETag(name: String)    = P( "</" ~ name ~ WL.? ~ ">" )
 
-    val Attribute = P( Index ~ Name ~ Eq ~ AttValue ).map {
+    val Attribute = P( Index ~ Name ~/ Eq ~/ AttValue ).map {
       case (pos, name, value) => p.Attribute(name, value, pos)
     }
     val Eq       = P( S.? ~ "=" ~ S.? )
