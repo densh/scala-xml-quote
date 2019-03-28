@@ -123,6 +123,6 @@ private[internal] object XmlParser {
 
   private implicit class ParserOps[T](val self: P[T]) extends AnyVal {
     /** Discard the result of this parser */
-    def toP0: P0 = self.map(_ => Unit)
+    def toP0: P0 = self.map(_ => ())
   }
 }
